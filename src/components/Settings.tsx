@@ -2,6 +2,8 @@ import { ChangeEvent, FormEvent, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Property } from '../types';
+import { COUNTRIES, PLATFORMS } from '../data';
+import { buildCSV } from '../utils';
 import { Modal } from './Modal';
 
 const COLORS = ['#FF5A5F', '#00A699', '#FC642D', '#5C6BC0', '#FFB400', '#7B61FF'];
@@ -60,6 +62,26 @@ export function Settings() {
     );
   };
 
+  const shareFile = async (blob: Blob, filename: string, mime: string) => {
+    if (typeof navigator.share === 'function') {
+      try {
+        const file = new File([blob], filename, { type: mime });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch {
+        /* fall through to download */
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExport = async () => {
     const props = await db.properties.toArray();
     const bookings = await db.bookings.toArray();
@@ -75,27 +97,72 @@ export function Settings() {
       type: 'application/json',
     });
     const filename = `airbnb-ledger-${new Date().toISOString().slice(0, 10)}.json`;
+    await shareFile(blob, filename, 'application/json');
+  };
 
-    if (typeof navigator.share === 'function') {
-      try {
-        const file = new File([blob], filename, { type: 'application/json' });
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: '에어비앤비 가계부 백업',
-          });
-          return;
-        }
-      } catch {
-        /* fall through */
-      }
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportCSV = async () => {
+    const props = await db.properties.toArray();
+    const bookings = await db.bookings.toArray();
+    const expenses = await db.expenses.toArray();
+
+    const propMap = new Map(props.map((p) => [p.id, p.name]));
+    const platformMap = new Map(PLATFORMS.map((p) => [p.value, p.label]));
+    const countryMap = new Map(COUNTRIES.map((c) => [c.code, c.name]));
+
+    const headers = [
+      '날짜',
+      '구분',
+      '숙소',
+      '카테고리',
+      '게스트',
+      '국가',
+      '인원',
+      '박수',
+      '매출(KRW)',
+      '비용(KRW)',
+      '메모',
+    ];
+
+    const rows: unknown[][] = [];
+
+    bookings.forEach((b) => {
+      rows.push([
+        b.checkIn,
+        '예약',
+        propMap.get(b.propertyId) ?? '',
+        platformMap.get(b.platform) ?? b.platform,
+        b.guestName,
+        countryMap.get(b.country) ?? b.country,
+        b.guests,
+        b.nights,
+        b.revenue,
+        '',
+        b.notes ?? '',
+      ]);
+    });
+
+    expenses.forEach((e) => {
+      rows.push([
+        e.date,
+        '비용',
+        e.propertyId ? (propMap.get(e.propertyId) ?? '') : '공통',
+        e.category,
+        '',
+        '',
+        '',
+        '',
+        '',
+        e.amount,
+        e.notes ?? '',
+      ]);
+    });
+
+    rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+    const csv = buildCSV(headers, rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const filename = `airbnb-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+    await shareFile(blob, filename, 'text/csv');
   };
 
   const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -199,13 +266,16 @@ export function Settings() {
       </section>
 
       <section className="section">
-        <h2>백업</h2>
+        <h2>내보내기</h2>
         <div className="card">
-          <button className="btn primary block" onClick={handleExport}>
-            JSON 내보내기
+          <button className="btn primary block" onClick={handleExportCSV}>
+            CSV 내보내기 (Excel/Sheets)
+          </button>
+          <button className="btn block" onClick={handleExport}>
+            JSON 백업
           </button>
           <label className="btn block file-label">
-            JSON 가져오기
+            JSON 복원
             <input
               type="file"
               accept="application/json,.json"
@@ -214,8 +284,9 @@ export function Settings() {
             />
           </label>
           <p className="muted small">
-            iOS Safari는 사용하지 않으면 데이터를 정리할 수 있어요. 정기적으로
-            내보내기 해주세요.
+            CSV: Google Sheets, Excel, Numbers에서 바로 열림. <br />
+            JSON: 백업/복원용. iOS Safari가 데이터를 정리할 수 있으니 정기적으로
+            저장하세요.
           </p>
         </div>
       </section>

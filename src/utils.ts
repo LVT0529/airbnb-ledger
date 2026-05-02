@@ -42,3 +42,18 @@ export function monthRange(year: number, month: number): {
 export function todayYmd(): string {
   return ymd(new Date());
 }
+
+function csvCell(value: unknown): string {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+export function buildCSV(headers: string[], rows: unknown[][]): string {
+  const lines = [headers, ...rows].map((row) =>
+    row.map(csvCell).join(','),
+  );
+  return '\uFEFF' + lines.join('\n');
+}
