@@ -5,10 +5,12 @@ import { Expense, ExpenseCategory, Property } from '../types';
 import { EXPENSE_CATEGORIES } from '../data';
 import {
   formatAmountInput,
+  getRecentCategories,
   loadPrefs,
   parseAmount,
   savePrefs,
   todayYmd,
+  trackRecentCategory,
 } from '../utils';
 import { addExpense, deleteExpense, updateExpense } from '../sync';
 import { Modal } from './Modal';
@@ -41,6 +43,8 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
     });
     return Array.from(set);
   }, [allExpenses]);
+
+  const recentCategories = useMemo(() => getRecentCategories(3), []);
   const [amountStr, setAmountStr] = useState(
     expense ? formatAmountInput(String(expense.amount)) : '',
   );
@@ -71,6 +75,7 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
         lastCategory: category,
         lastExpensePropertyId: propertyId,
       });
+      trackRecentCategory(category);
 
       if (keepOpen && !expense) {
         setAmountStr('');
@@ -124,6 +129,20 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
         </label>
         <label>
           카테고리
+          {recentCategories.length > 0 && (
+            <div className="quick-chips">
+              {recentCategories.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`quick-chip ${category === c ? 'active' : ''}`}
+                  onClick={() => setCategory(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
           <input
             type="text"
             value={category}

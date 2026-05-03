@@ -226,7 +226,12 @@ export function Calendar() {
   const todayYmd = ymd(today);
 
   const selectedDayBookings = selected
-    ? bookings.filter((b) => b.checkIn <= selected && b.checkOut > selected)
+    ? bookings.filter(
+        (b) =>
+          b.checkIn <= selected &&
+          b.checkOut > selected &&
+          b.status !== 'blocked',
+      )
     : [];
 
   const numWeeks = cells.length / 7;
@@ -312,12 +317,29 @@ export function Calendar() {
               .map((bar) => {
                 const prop = propMap.get(bar.booking.propertyId);
                 const isPending = bar.booking.status === 'pending';
+                const isBlocked = bar.booking.status === 'blocked';
                 const platform = PLATFORMS.find(
                   (p) => p.value === bar.booking.platform,
                 );
                 const leftPct = (bar.startCol / 7) * 100;
                 const rightPct =
                   ((7 - bar.startCol - bar.span) / 7) * 100;
+
+                if (isBlocked) {
+                  return (
+                    <div
+                      key={bar.booking.id}
+                      className="cal-bar blocked"
+                      style={{
+                        left: `calc(${leftPct}% + 2px)`,
+                        right: `calc(${rightPct}% + 2px)`,
+                        top: bar.rowIndex * 19 + 24,
+                      }}
+                      title={`차단된 기간 (${bar.booking.checkIn} ~ ${bar.booking.checkOut})`}
+                    />
+                  );
+                }
+
                 return (
                   <div
                     key={bar.booking.id}

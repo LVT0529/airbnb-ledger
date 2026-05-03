@@ -77,6 +77,7 @@ interface Prefs {
   lastCountry?: string;
   lastCategory?: string;
   lastExpensePropertyId?: string | null;
+  recentCategories?: string[]; // 최근 사용 순서, 최대 6개
 }
 
 export function loadPrefs(): Prefs {
@@ -91,6 +92,18 @@ export function loadPrefs(): Prefs {
 export function savePrefs(patch: Partial<Prefs>): void {
   const current = loadPrefs();
   localStorage.setItem(PREFS_KEY, JSON.stringify({ ...current, ...patch }));
+}
+
+export function trackRecentCategory(category: string): void {
+  if (!category.trim()) return;
+  const prefs = loadPrefs();
+  const list = (prefs.recentCategories ?? []).filter((c) => c !== category);
+  list.unshift(category);
+  savePrefs({ recentCategories: list.slice(0, 6) });
+}
+
+export function getRecentCategories(limit = 3): string[] {
+  return (loadPrefs().recentCategories ?? []).slice(0, limit);
 }
 
 export function parseCSV(text: string): Record<string, string>[] {

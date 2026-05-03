@@ -8,7 +8,7 @@ export interface Property {
   createdAt: number;
 }
 
-export type BookingStatus = 'confirmed' | 'pending';
+export type BookingStatus = 'confirmed' | 'pending' | 'blocked';
 
 export interface Booking {
   id: string;

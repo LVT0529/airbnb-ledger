@@ -15,14 +15,17 @@ export function Bookings() {
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
   const bookings =
     useLiveQuery(async () => {
+      let list: Booking[];
       if (filterProperty === 'all') {
-        return db.bookings.orderBy('checkIn').reverse().toArray();
+        list = await db.bookings.orderBy('checkIn').reverse().toArray();
+      } else {
+        const filtered = await db.bookings
+          .where('propertyId')
+          .equals(filterProperty)
+          .toArray();
+        list = filtered.sort((a, b) => b.checkIn.localeCompare(a.checkIn));
       }
-      const list = await db.bookings
-        .where('propertyId')
-        .equals(filterProperty)
-        .toArray();
-      return list.sort((a, b) => b.checkIn.localeCompare(a.checkIn));
+      return list.filter((b) => b.status !== 'blocked');
     }, [filterProperty]) ?? [];
 
   const handleAdd = () => {

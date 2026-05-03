@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "fetch:airbnb": "node scripts/airbnb-fetch.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -24,6 +25,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.59.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vite-plugin-pwa": "^0.21.0",

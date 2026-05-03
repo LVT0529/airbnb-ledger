@@ -42,7 +42,7 @@ export function Dashboard() {
   );
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
-  const bookings =
+  const bookingsRaw =
     useLiveQuery(
       () =>
         db.bookings
@@ -51,6 +51,7 @@ export function Dashboard() {
           .toArray(),
       [range.start, range.end],
     ) ?? [];
+  const bookings = bookingsRaw.filter((b) => b.status !== 'blocked');
   const expenses =
     useLiveQuery(
       () =>
@@ -61,7 +62,7 @@ export function Dashboard() {
       [range.start, range.end],
     ) ?? [];
 
-  const prevBookings =
+  const prevBookingsRaw =
     useLiveQuery(
       () =>
         db.bookings
@@ -70,6 +71,7 @@ export function Dashboard() {
           .toArray(),
       [prevRange.start, prevRange.end],
     ) ?? [];
+  const prevBookings = prevBookingsRaw.filter((b) => b.status !== 'blocked');
   const prevExpenses =
     useLiveQuery(
       () =>

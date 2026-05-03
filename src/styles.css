@@ -663,6 +663,29 @@ input, button, select, textarea {
   background: var(--pending) !important;
   border: 1px dashed rgba(255, 255, 255, 0.7);
 }
+.cal-bar.blocked {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(154, 139, 123, 0.55) 0,
+    rgba(154, 139, 123, 0.55) 4px,
+    rgba(226, 215, 195, 0.6) 4px,
+    rgba(226, 215, 195, 0.6) 8px
+  ) !important;
+  cursor: default;
+  border: 1px solid rgba(154, 139, 123, 0.3);
+  box-shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  .cal-bar.blocked {
+    background: repeating-linear-gradient(
+      -45deg,
+      rgba(184, 169, 154, 0.35) 0,
+      rgba(184, 169, 154, 0.35) 4px,
+      rgba(46, 38, 32, 0.5) 4px,
+      rgba(46, 38, 32, 0.5) 8px
+    ) !important;
+  }
+}
 .cal-bar-emoji {
   font-size: 11px;
   line-height: 1;
@@ -1035,6 +1058,33 @@ input, button, select, textarea {
   width: 18px !important;
   height: 18px !important;
   accent-color: var(--accent);
+}
+
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.quick-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.quick-chip:hover { border-color: var(--accent); color: var(--accent); }
+.quick-chip.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
 }
 
 /* Pending booking */

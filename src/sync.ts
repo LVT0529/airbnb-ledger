@@ -336,7 +336,9 @@ export async function syncIcalForProperty(
     return result;
   }
 
-  const events = parseICS(ics).filter((ev) => ev.isReservation);
+  const allEvents = parseICS(ics);
+  const reservationEvents = allEvents.filter((ev) => ev.isReservation);
+  const blockedEvents = allEvents.filter((ev) => !ev.isReservation);
 
   const existingRes = await supabase
     .from('bookings')
@@ -350,8 +352,10 @@ export async function syncIcalForProperty(
   );
 
   const userId = await getUserId();
+
+  // 1. Reservations
   const toInsert: Record<string, unknown>[] = [];
-  for (const ev of events) {
+  for (const ev of reservationEvents) {
     if (!ev.confirmationCode) {
       result.skipped++;
       continue;
@@ -382,6 +386,38 @@ export async function syncIcalForProperty(
       result.errors.push(ins.error.message);
     } else {
       result.added += toInsert.length;
+    }
+  }
+
+  // 2. Blocked periods — 매 sync마다 기존 blocked 삭제 후 재추가 (차단 기간은 자주 변경됨)
+  await supabase
+    .from('bookings')
+    .delete()
+    .eq('property_id', property.id)
+    .eq('status', 'blocked');
+
+  const blockedToInsert: Record<string, unknown>[] = [];
+  for (const ev of blockedEvents) {
+    const uid = ev.uid ? ev.uid.slice(0, 32) : `${ev.start}-${ev.end}`;
+    blockedToInsert.push({
+      user_id: userId,
+      property_id: property.id,
+      guest_name: '차단',
+      country: 'KR',
+      platform: 'airbnb',
+      guests: 0,
+      nights: diffDays(ev.start, ev.end),
+      check_in: ev.start,
+      check_out: ev.end,
+      revenue: 0,
+      confirmation_code: `BLOCK-${uid}`,
+      status: 'blocked',
+    });
+  }
+  if (blockedToInsert.length) {
+    const ins = await supabase.from('bookings').insert(blockedToInsert);
+    if (ins.error) {
+      result.errors.push(`blocked: ${ins.error.message}`);
     }
   }
 
