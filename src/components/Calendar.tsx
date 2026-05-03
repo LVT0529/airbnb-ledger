@@ -235,7 +235,7 @@ export function Calendar() {
     : [];
 
   const numWeeks = cells.length / 7;
-  const ROW_HEIGHT = Math.max(maxRow, 1) * 19 + 30;
+  const ROW_HEIGHT = Math.max(maxRow, 1) * 22 + 32;
 
   return (
     <div className="screen">
@@ -333,7 +333,7 @@ export function Calendar() {
                       style={{
                         left: `calc(${leftPct}% + 2px)`,
                         right: `calc(${rightPct}% + 2px)`,
-                        top: bar.rowIndex * 19 + 24,
+                        top: bar.rowIndex * 22 + 26,
                       }}
                       title={`차단된 기간 (${bar.booking.checkIn} ~ ${bar.booking.checkOut})`}
                     />
@@ -347,7 +347,7 @@ export function Calendar() {
                     style={{
                       left: `calc(${leftPct}% + 2px)`,
                       right: `calc(${rightPct}% + 2px)`,
-                      top: bar.rowIndex * 19 + 24,
+                      top: bar.rowIndex * 22 + 26,
                       background: prop?.color ?? '#888',
                     }}
                     onClick={(e) => {
@@ -356,11 +356,12 @@ export function Calendar() {
                     }}
                     title={`${bar.booking.guestName} · ${platform?.label ?? ''} (${bar.booking.checkIn} ~ ${bar.booking.checkOut})`}
                   >
-                    {bar.span >= 3 ? (
+                    {bar.span >= 4 ? (
                       <>
-                        <span className="cal-bar-emoji">
-                          {platform?.emoji ?? '·'}
+                        <span className="cal-bar-platform">
+                          {platform?.short ?? '·'}
                         </span>
+                        <span className="cal-bar-sep">·</span>
                         {!isPending && (
                           <span className="cal-bar-flag">
                             {flagEmoji(bar.booking.country)}
@@ -370,18 +371,23 @@ export function Calendar() {
                           {bar.booking.guestName}
                         </span>
                       </>
-                    ) : bar.span === 2 ? (
+                    ) : bar.span === 3 ? (
                       <>
-                        <span className="cal-bar-emoji">
-                          {platform?.emoji ?? '·'}
+                        <span className="cal-bar-platform">
+                          {platform?.short ?? '·'}
                         </span>
+                        <span className="cal-bar-sep">·</span>
                         <span className="cal-bar-name">
                           {bar.booking.guestName}
                         </span>
                       </>
+                    ) : bar.span === 2 ? (
+                      <span className="cal-bar-platform">
+                        {platform?.short ?? '·'}
+                      </span>
                     ) : (
-                      <span className="cal-bar-emoji">
-                        {platform?.emoji ?? '·'}
+                      <span className="cal-bar-platform">
+                        {platform?.short?.slice(0, 1) ?? '·'}
                       </span>
                     )}
                   </div>

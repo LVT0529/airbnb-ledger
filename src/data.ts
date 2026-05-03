@@ -1,12 +1,17 @@
 import { Platform } from './types';
 
-export const PLATFORMS: { value: Platform; label: string; emoji: string }[] = [
-  { value: 'airbnb', label: 'Airbnb', emoji: '🏠' },
-  { value: 'booking', label: 'Booking.com', emoji: '🛎️' },
-  { value: 'agoda', label: 'Agoda', emoji: '🌏' },
-  { value: 'expedia', label: 'Expedia', emoji: '✈️' },
-  { value: 'direct', label: '직접 예약', emoji: '📞' },
-  { value: 'other', label: '기타', emoji: '📋' },
+export const PLATFORMS: {
+  value: Platform;
+  label: string;
+  short: string;
+  emoji: string;
+}[] = [
+  { value: 'airbnb', label: 'Airbnb', short: 'Airbnb', emoji: '🏠' },
+  { value: 'booking', label: 'Booking.com', short: 'Booking', emoji: '🛎️' },
+  { value: 'agoda', label: 'Agoda', short: 'Agoda', emoji: '🌏' },
+  { value: 'expedia', label: 'Expedia', short: 'Expedia', emoji: '✈️' },
+  { value: 'direct', label: '직접 예약', short: '직접', emoji: '📞' },
+  { value: 'other', label: '기타', short: '기타', emoji: '📋' },
 ];
 
 export const COUNTRIES = [

@@ -639,24 +639,24 @@ input, button, select, textarea {
 
 .cal-bar {
   position: absolute;
-  height: 18px;
+  height: 20px;
   border-radius: 4px;
   color: white;
   font-family: var(--sans);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.01em;
-  padding: 0 5px;
+  padding: 0 6px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   z-index: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
 }
 .cal-bar.pending {
   opacity: 0.7;
@@ -686,14 +686,22 @@ input, button, select, textarea {
     ) !important;
   }
 }
-.cal-bar-emoji {
+.cal-bar-platform {
+  font-family: var(--sans);
+  font-weight: 700;
   font-size: 11px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.cal-bar-sep {
+  opacity: 0.55;
+  font-weight: 400;
+  flex-shrink: 0;
 }
 .cal-bar-flag {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
+  flex-shrink: 0;
 }
 .cal-bar-name {
   overflow: hidden;
@@ -701,6 +709,7 @@ input, button, select, textarea {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  font-weight: 600;
 }
 
 .cal-sync-row {
