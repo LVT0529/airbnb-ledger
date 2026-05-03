@@ -1,4 +1,6 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
 import { Expense, ExpenseCategory, Property } from '../types';
 import { EXPENSE_CATEGORIES } from '../data';
 import {
@@ -28,8 +30,17 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
 
   const [propertyId, setPropertyId] = useState<string | null>(initialPropId);
   const [category, setCategory] = useState<ExpenseCategory>(
-    expense?.category ?? (prefs.lastCategory as ExpenseCategory) ?? '청소비',
+    expense?.category ?? prefs.lastCategory ?? '청소비',
   );
+
+  const allExpenses = useLiveQuery(() => db.expenses.toArray()) ?? [];
+  const categorySuggestions = useMemo(() => {
+    const set = new Set<string>(EXPENSE_CATEGORIES);
+    allExpenses.forEach((e) => {
+      if (e.category) set.add(e.category);
+    });
+    return Array.from(set);
+  }, [allExpenses]);
   const [amountStr, setAmountStr] = useState(
     expense ? formatAmountInput(String(expense.amount)) : '',
   );
@@ -113,16 +124,20 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
         </label>
         <label>
           카테고리
-          <select
+          <input
+            type="text"
             value={category}
-            onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-          >
-            {EXPENSE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+            onChange={(e) => setCategory(e.target.value)}
+            list="cat-suggestions"
+            required
+            placeholder="예: 청소비, 광고비, 인테리어…"
+            autoComplete="off"
+          />
+          <datalist id="cat-suggestions">
+            {categorySuggestions.map((c) => (
+              <option key={c} value={c} />
             ))}
-          </select>
+          </datalist>
         </label>
         <label>
           금액 (KRW)

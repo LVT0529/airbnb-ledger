@@ -38,7 +38,8 @@ export const EXPENSE_CATEGORIES = [
   '기타',
 ] as const;
 
-export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
+// 기본 카테고리 + 사용자가 직접 추가한 카테고리 모두 허용
+export type ExpenseCategory = string;
 
 export interface Expense {
   id: string;

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { RefreshCw } from 'lucide-react';
 import { db } from '../db';
 import { Booking } from '../types';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW } from '../utils';
+import { syncAllIcals } from '../sync';
 import { BookingForm } from './BookingForm';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -140,6 +142,54 @@ export function Calendar() {
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
   const bookings = useLiveQuery(() => db.bookings.toArray()) ?? [];
 
+  const [icalSyncing, setIcalSyncing] = useState(false);
+  const [icalToast, setIcalToast] = useState<string | null>(null);
+  const autoSyncedRef = useRef(false);
+
+  const propertiesWithIcal = useMemo(
+    () => properties.filter((p) => !!p.icalUrl),
+    [properties],
+  );
+
+  const runSync = async (silent = false) => {
+    if (propertiesWithIcal.length === 0) {
+      if (!silent) {
+        setIcalToast('iCal URL이 등록된 숙소가 없어요. 설정에서 추가하세요.');
+        setTimeout(() => setIcalToast(null), 3000);
+      }
+      return;
+    }
+    setIcalSyncing(true);
+    try {
+      const r = await syncAllIcals(propertiesWithIcal);
+      if (r.added > 0) {
+        setIcalToast(`Airbnb에서 새 예약 ${r.added}건을 가져왔어요`);
+      } else if (!silent) {
+        setIcalToast('새 예약이 없어요. 캘린더가 최신 상태입니다.');
+      }
+      if (icalToast) setTimeout(() => setIcalToast(null), 3000);
+      else setTimeout(() => setIcalToast(null), 3000);
+    } catch (e) {
+      if (!silent) {
+        setIcalToast(
+          '동기화 실패: ' + (e instanceof Error ? e.message : '알 수 없음'),
+        );
+        setTimeout(() => setIcalToast(null), 4000);
+      }
+    } finally {
+      setIcalSyncing(false);
+    }
+  };
+
+  // 캘린더 탭 처음 진입 시 자동 sync (한 번만)
+  useEffect(() => {
+    if (autoSyncedRef.current) return;
+    if (propertiesWithIcal.length === 0) return;
+    autoSyncedRef.current = true;
+    runSync(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertiesWithIcal.length]);
+
   const cells = useMemo(() => buildMonthGrid(year, month), [year, month]);
 
   const monthBookings = useMemo(() => {
@@ -195,6 +245,28 @@ export function Calendar() {
           ›
         </button>
       </div>
+
+      {propertiesWithIcal.length > 0 && (
+        <div className="cal-sync-row">
+          <span className="eyebrow">
+            Airbnb 캘린더 · {propertiesWithIcal.length}개 숙소 연결됨
+          </span>
+          <button
+            className="cal-sync-btn"
+            onClick={() => runSync(false)}
+            disabled={icalSyncing}
+            aria-label="동기화"
+          >
+            <RefreshCw
+              size={14}
+              className={icalSyncing ? 'spin-icon' : undefined}
+            />
+            <span>{icalSyncing ? '동기화 중' : '지금 동기화'}</span>
+          </button>
+        </div>
+      )}
+
+      {icalToast && <div className="cal-toast">{icalToast}</div>}
 
       <div className="calendar">
         <div className="calendar-header">
