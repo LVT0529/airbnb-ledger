@@ -4,6 +4,18 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW, monthRange } from '../utils';
+import { DonutChart } from './DonutChart';
+
+const CATEGORY_PALETTE = [
+  '#C45A3A', // terracotta
+  '#5C7A6E', // sage
+  '#B8964F', // gold
+  '#8B9F6B', // olive
+  '#A87B5C', // bronze
+  '#6B8AA8', // dusty blue
+  '#9F6B8B', // dusty pink
+  '#4A6B5C', // deep sage
+];
 
 function formatKRWBare(amount: number): string {
   return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(
@@ -95,6 +107,32 @@ export function Dashboard() {
     };
   });
 
+  const revenueSegments = useMemo(
+    () =>
+      byProperty
+        .filter((p) => p.revenue > 0)
+        .map((p) => ({
+          label: p.property.name,
+          value: p.revenue,
+          color: p.property.color,
+        })),
+    [byProperty],
+  );
+
+  const expenseSegments = useMemo(() => {
+    const map = new Map<string, number>();
+    expenses.forEach((e) => {
+      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    });
+    return Array.from(map.entries())
+      .map(([label, value], i) => ({
+        label,
+        value,
+        color: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses]);
+
   const byPlatform = useMemo(() => {
     const map: Record<string, number> = {};
     bookings.forEach((b) => {
@@ -181,6 +219,91 @@ export function Dashboard() {
           </span>
         </div>
       </div>
+
+      {(revenueSegments.length > 0 || expenseSegments.length > 0) && (
+        <div className="donut-grid">
+          {revenueSegments.length > 0 && (
+            <div className="donut-card">
+              <div className="donut-card-header">
+                <span className="eyebrow">매출 구성</span>
+                <span className="donut-card-total tabular">
+                  ₩ {formatKRWBare(totalRevenue)}
+                </span>
+              </div>
+              <div className="donut-wrap">
+                <DonutChart
+                  segments={revenueSegments}
+                  centerLabel="숙소 수"
+                  centerValue={String(revenueSegments.length)}
+                />
+              </div>
+              <ul className="donut-legend">
+                {revenueSegments.map((s) => {
+                  const pct =
+                    totalRevenue > 0 ? (s.value / totalRevenue) * 100 : 0;
+                  return (
+                    <li key={s.label}>
+                      <span
+                        className="legend-dot"
+                        style={{ background: s.color }}
+                      />
+                      <span className="legend-name">{s.label}</span>
+                      <span className="legend-pct tabular">
+                        {pct.toFixed(0)}%
+                      </span>
+                      <span className="legend-amount tabular">
+                        ₩ {formatKRWBare(s.value)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {expenseSegments.length > 0 && (
+            <div className="donut-card">
+              <div className="donut-card-header">
+                <span className="eyebrow">비용 구성</span>
+                <span
+                  className="donut-card-total tabular"
+                  style={{ color: 'var(--neg)' }}
+                >
+                  − ₩ {formatKRWBare(totalExpense)}
+                </span>
+              </div>
+              <div className="donut-wrap">
+                <DonutChart
+                  segments={expenseSegments}
+                  centerLabel="항목"
+                  centerValue={String(expenseSegments.length)}
+                />
+              </div>
+              <ul className="donut-legend">
+                {expenseSegments.map((s) => {
+                  const pct =
+                    totalExpense > 0 ? (s.value / totalExpense) * 100 : 0;
+                  return (
+                    <li key={s.label}>
+                      <span
+                        className="legend-dot"
+                        style={{ background: s.color }}
+                      />
+                      <span className="legend-name">{s.label}</span>
+                      <span className="legend-pct tabular">
+                        {pct.toFixed(0)}%
+                      </span>
+                      <span className="legend-amount tabular">
+                        ₩ {formatKRWBare(s.value)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="dash-stats">
         <div className="dash-stat">
