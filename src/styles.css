@@ -227,7 +227,7 @@ input, button, select, textarea {
   cursor: pointer;
   flex: 1;
 }
-.bottom-nav button .icon { font-size: 22px; line-height: 1; }
+.bottom-nav button svg { display: block; }
 .bottom-nav button.active { color: var(--primary); }
 
 .modal-overlay {
@@ -348,12 +348,11 @@ input, button, select, textarea {
   font-size: 12px;
   color: var(--muted);
 }
-.sync-pill .sync-icon { font-size: 14px; line-height: 1; }
+.sync-pill svg { display: block; }
 .sync-pill.synced { color: var(--pos); }
-.sync-pill.synced .sync-icon { color: var(--pos); }
-.sync-pill.syncing .sync-icon { animation: spin 1s linear infinite; display: inline-block; }
 .sync-pill.offline { color: var(--muted); }
 .sync-pill.error { color: var(--neg); }
+.spin-icon { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .header-user {
