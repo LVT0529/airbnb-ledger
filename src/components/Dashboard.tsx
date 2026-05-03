@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW, monthRange } from '../utils';
+
+function formatKRWBare(amount: number): string {
+  return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(
+    Math.abs(amount),
+  );
+}
 
 export function Dashboard() {
   const today = new Date();
@@ -10,6 +17,10 @@ export function Dashboard() {
   const [month, setMonth] = useState(today.getMonth() + 1);
 
   const range = monthRange(year, month);
+  const prevRange = monthRange(
+    month === 1 ? year - 1 : year,
+    month === 1 ? 12 : month - 1,
+  );
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
   const bookings =
@@ -31,6 +42,25 @@ export function Dashboard() {
       [range.start, range.end],
     ) ?? [];
 
+  const prevBookings =
+    useLiveQuery(
+      () =>
+        db.bookings
+          .where('checkIn')
+          .between(prevRange.start, prevRange.end, true, true)
+          .toArray(),
+      [prevRange.start, prevRange.end],
+    ) ?? [];
+  const prevExpenses =
+    useLiveQuery(
+      () =>
+        db.expenses
+          .where('date')
+          .between(prevRange.start, prevRange.end, true, true)
+          .toArray(),
+      [prevRange.start, prevRange.end],
+    ) ?? [];
+
   const totalRevenue = bookings.reduce((s, b) => s + b.revenue, 0);
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const profit = totalRevenue - totalExpense;
@@ -39,6 +69,15 @@ export function Dashboard() {
     properties.length > 0
       ? (totalNights / (properties.length * range.days)) * 100
       : 0;
+
+  const prevProfit =
+    prevBookings.reduce((s, b) => s + b.revenue, 0) -
+    prevExpenses.reduce((s, e) => s + e.amount, 0);
+
+  const deltaPct =
+    prevProfit !== 0
+      ? Math.round(((profit - prevProfit) / Math.abs(prevProfit)) * 100)
+      : null;
 
   const byProperty = properties.map((p) => {
     const b = bookings.filter((x) => x.propertyId === p.id);
@@ -94,114 +133,202 @@ export function Dashboard() {
 
   return (
     <div className="screen">
-      <div className="month-nav">
-        <button onClick={prev} aria-label="이전 달">
-          ‹
-        </button>
-        <h1>
-          {year}년 {month}월
+      <div className="dash-hero">
+        <div className="dash-monthnav">
+          <span className="eyebrow">
+            {year} · {String(month).padStart(2, '0')}월
+          </span>
+          <div className="dash-monthnav-arrows">
+            <button onClick={prev} aria-label="이전 달">
+              <ChevronLeft size={16} />
+            </button>
+            <button onClick={next} aria-label="다음 달">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        <span className="dash-net-label">순이익 · Net</span>
+        <h1 className={`dash-net ${profit < 0 ? 'neg' : ''}`}>
+          <span className="currency-mark">₩</span>
+          {profit < 0 && '−'}
+          {formatKRWBare(profit)}
         </h1>
-        <button onClick={next} aria-label="다음 달">
-          ›
-        </button>
+        {deltaPct !== null && (
+          <div className="dash-delta">
+            <span
+              className={`dash-delta-value ${deltaPct < 0 ? 'neg' : ''}`}
+            >
+              {deltaPct >= 0 ? '↑' : '↓'} {Math.abs(deltaPct)}%
+            </span>
+            <span>지난달 대비</span>
+          </div>
+        )}
       </div>
 
-      <div className="card">
-        <div className="metric">
-          <span>매출</span>
-          <strong>{formatKRW(totalRevenue)}</strong>
+      <div className="dash-split">
+        <div className="dash-split-cell">
+          <span className="eyebrow">매출</span>
+          <span className="dash-split-amount">
+            ₩ {formatKRWBare(totalRevenue)}
+          </span>
         </div>
-        <div className="metric">
-          <span>비용</span>
-          <strong className="neg">−{formatKRW(totalExpense)}</strong>
-        </div>
-        <hr />
-        <div className="metric large">
-          <span>순이익</span>
-          <strong className={profit >= 0 ? 'pos' : 'neg'}>
-            {formatKRW(profit)}
-          </strong>
-        </div>
-        <div className="metric">
-          <span>예약</span>
-          <strong>
-            {bookings.length}건 · {totalNights}박
-          </strong>
-        </div>
-        <div className="metric">
-          <span>점유율</span>
-          <strong>{occupancy.toFixed(1)}%</strong>
+        <div className="dash-split-divider" />
+        <div className="dash-split-cell right">
+          <span className="eyebrow">비용</span>
+          <span className="dash-split-amount" style={{ color: 'var(--neg)' }}>
+            − ₩ {formatKRWBare(totalExpense)}
+          </span>
         </div>
       </div>
 
-      {properties.length === 0 ? (
-        <div className="empty">설정에서 숙소를 먼저 추가해주세요</div>
-      ) : (
-        <div className="property-grid">
+      <div className="dash-stats">
+        <div className="dash-stat">
+          <span className="eyebrow">예약</span>
+          <div className="dash-stat-value">
+            {bookings.length}
+            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+              {' '}건
+            </span>
+          </div>
+        </div>
+        <div className="dash-stat">
+          <span className="eyebrow">투숙</span>
+          <div className="dash-stat-value">
+            {totalNights}
+            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+              {' '}박
+            </span>
+          </div>
+        </div>
+        <div className="dash-stat">
+          <span className="eyebrow">점유율</span>
+          <div className="dash-stat-value">
+            {occupancy.toFixed(0)}
+            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+              {' '}%
+            </span>
+          </div>
+        </div>
+        <div className="dash-stat">
+          <span className="eyebrow">숙소</span>
+          <div className="dash-stat-value">
+            {properties.length}
+            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+              {' '}개
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {properties.length > 0 && (
+        <>
+          <div className="dash-section-title">
+            <h2>숙소별 손익</h2>
+            <span className="eyebrow">By property</span>
+          </div>
           {byProperty.map((p) => (
-            <div key={p.property.id} className="card">
-              <div className="prop-header">
-                <span className="dot" style={{ background: p.property.color }} />
-                <h3>{p.property.name}</h3>
+            <div
+              key={p.property.id}
+              className="dash-property-card"
+              style={{ ['--prop-color' as string]: p.property.color }}
+            >
+              <h3>{p.property.name}</h3>
+              <div className="dash-property-row">
+                <span className="label">매출</span>
+                <span className="value">₩ {formatKRWBare(p.revenue)}</span>
               </div>
-              <div className="metric">
-                <span>매출</span>
-                <strong>{formatKRW(p.revenue)}</strong>
+              <div className="dash-property-row">
+                <span className="label">비용</span>
+                <span className="value" style={{ color: 'var(--neg)' }}>
+                  − ₩ {formatKRWBare(p.expense)}
+                </span>
               </div>
-              <div className="metric">
-                <span>비용</span>
-                <strong className="neg">−{formatKRW(p.expense)}</strong>
-              </div>
-              <div className="metric">
-                <span>순이익</span>
-                <strong className={p.profit >= 0 ? 'pos' : 'neg'}>
-                  {formatKRW(p.profit)}
-                </strong>
-              </div>
-              <div className="metric">
-                <span>예약 / 박</span>
-                <strong>
+              <div className="dash-property-row">
+                <span className="label">예약 · 투숙</span>
+                <span className="value">
                   {p.count}건 · {p.nights}박
-                </strong>
+                </span>
+              </div>
+              <div className="dash-property-row profit">
+                <span className="label">순이익</span>
+                <span
+                  className="value"
+                  style={{
+                    color: p.profit >= 0 ? 'var(--pos)' : 'var(--neg)',
+                  }}
+                >
+                  {p.profit < 0 && '−'}₩ {formatKRWBare(p.profit)}
+                </span>
               </div>
             </div>
           ))}
+        </>
+      )}
+
+      {properties.length === 0 && (
+        <div className="empty">
+          숙소를 추가하고
+          <br />
+          이번 달 이야기를 시작해 보세요.
         </div>
       )}
 
       {byPlatform.length > 0 && (
-        <div className="card">
-          <h3>플랫폼별 매출</h3>
-          {byPlatform.map((p) => {
-            const pct =
-              totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
-            return (
-              <div key={p.value} className="bar-row">
-                <span>
-                  {p.emoji} {p.label}
-                </span>
-                <div className="bar">
-                  <div className="bar-fill" style={{ width: `${pct}%` }} />
+        <>
+          <div className="dash-section-title">
+            <h2>플랫폼별 매출</h2>
+            <span className="eyebrow">By channel</span>
+          </div>
+          <div className="card">
+            {byPlatform.map((p) => {
+              const pct =
+                totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
+              return (
+                <div key={p.value} className="bar-row">
+                  <span>
+                    {p.emoji} {p.label}
+                  </span>
+                  <div className="bar">
+                    <div
+                      className="bar-fill"
+                      style={{
+                        width: `${pct}%`,
+                        background:
+                          p.value === 'airbnb' ? 'var(--accent)' : 'var(--olive)',
+                      }}
+                    />
+                  </div>
+                  <span className="bar-value">
+                    ₩ {formatKRWBare(p.revenue)}
+                  </span>
                 </div>
-                <span className="bar-value">{formatKRW(p.revenue)}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {byCountry.length > 0 && (
-        <div className="card">
-          <h3>국가별 예약</h3>
-          <div className="country-grid">
-            {byCountry.map((c) => (
-              <div key={c.code} className="country-pill">
-                {flagEmoji(c.code)} {c.name} <strong>{c.count}</strong>
-              </div>
-            ))}
+        <>
+          <div className="dash-section-title">
+            <h2>국가별 게스트</h2>
+            <span className="eyebrow">By origin</span>
           </div>
-        </div>
+          <div className="card">
+            <div className="country-grid">
+              {byCountry.map((c) => (
+                <div key={c.code} className="country-pill">
+                  {flagEmoji(c.code)} {c.name} <strong>{c.count}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
 }
+
+// formatKRW used elsewhere
+export { formatKRW };
