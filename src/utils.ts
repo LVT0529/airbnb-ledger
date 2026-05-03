@@ -57,3 +57,38 @@ export function buildCSV(headers: string[], rows: unknown[][]): string {
   );
   return '\uFEFF' + lines.join('\n');
 }
+
+export function formatAmountInput(value: string): string {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  return Number(digits).toLocaleString('ko-KR');
+}
+
+export function parseAmount(value: string): number {
+  const digits = value.replace(/[^\d]/g, '');
+  return digits ? Number(digits) : 0;
+}
+
+const PREFS_KEY = 'airbnb-ledger-prefs';
+
+interface Prefs {
+  lastPropertyId?: string;
+  lastPlatform?: string;
+  lastCountry?: string;
+  lastCategory?: string;
+  lastExpensePropertyId?: string | null;
+}
+
+export function loadPrefs(): Prefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function savePrefs(patch: Partial<Prefs>): void {
+  const current = loadPrefs();
+  localStorage.setItem(PREFS_KEY, JSON.stringify({ ...current, ...patch }));
+}

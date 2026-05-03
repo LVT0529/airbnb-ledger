@@ -1,15 +1,15 @@
 export type Platform = 'airbnb' | 'booking' | 'agoda' | 'expedia' | 'direct' | 'other';
 
 export interface Property {
-  id?: number;
+  id: string;
   name: string;
   color: string;
   createdAt: number;
 }
 
 export interface Booking {
-  id?: number;
-  propertyId: number;
+  id: string;
+  propertyId: string;
   guestName: string;
   country: string;
   platform: Platform;
@@ -36,11 +36,13 @@ export const EXPENSE_CATEGORIES = [
 export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
 
 export interface Expense {
-  id?: number;
-  propertyId: number | null;
+  id: string;
+  propertyId: string | null;
   category: ExpenseCategory;
   amount: number;
   date: string;
   notes?: string;
   createdAt: number;
 }
+
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';

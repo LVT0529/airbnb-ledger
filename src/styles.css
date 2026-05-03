@@ -325,3 +325,130 @@ input, button, select, textarea {
 .color-swatch.selected { border: 3px solid var(--text); }
 
 .muted.small { color: var(--muted); font-size: 13px; margin: 12px 0 0; line-height: 1.4; }
+
+/* Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--muted);
+}
+.sync-pill .sync-icon { font-size: 14px; line-height: 1; }
+.sync-pill.synced { color: var(--pos); }
+.sync-pill.synced .sync-icon { color: var(--pos); }
+.sync-pill.syncing .sync-icon { animation: spin 1s linear infinite; display: inline-block; }
+.sync-pill.offline { color: var(--muted); }
+.sync-pill.error { color: var(--neg); }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.header-user {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+/* Login */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.login-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 32px 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+.login-card h1 {
+  font-size: 22px;
+  margin: 12px 0 6px;
+}
+.login-card .muted {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 20px;
+  display: block;
+}
+.login-card .form { text-align: left; margin-top: 16px; }
+.login-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--primary);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 800;
+  margin: 0 auto;
+}
+.error {
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--neg);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* Amount input with suffix */
+.amount-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.amount-input input {
+  padding-right: 36px !important;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.amount-suffix {
+  position: absolute;
+  right: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Checkbox row */
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 14px !important;
+  color: var(--text) !important;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  accent-color: var(--primary);
+}

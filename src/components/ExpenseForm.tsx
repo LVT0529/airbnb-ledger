@@ -1,8 +1,14 @@
 import { FormEvent, useState } from 'react';
-import { db } from '../db';
 import { Expense, ExpenseCategory, Property } from '../types';
 import { EXPENSE_CATEGORIES } from '../data';
-import { todayYmd } from '../utils';
+import {
+  formatAmountInput,
+  loadPrefs,
+  parseAmount,
+  savePrefs,
+  todayYmd,
+} from '../utils';
+import { addExpense, deleteExpense, updateExpense } from '../sync';
 import { Modal } from './Modal';
 
 interface Props {
@@ -12,39 +18,77 @@ interface Props {
 }
 
 export function ExpenseForm({ expense, properties, onClose }: Props) {
-  const [propertyId, setPropertyId] = useState<number | null>(
-    expense?.propertyId ?? null,
-  );
+  const prefs = loadPrefs();
+  const initialPropId =
+    expense?.propertyId !== undefined
+      ? expense.propertyId
+      : prefs.lastExpensePropertyId !== undefined
+        ? prefs.lastExpensePropertyId
+        : null;
+
+  const [propertyId, setPropertyId] = useState<string | null>(initialPropId);
   const [category, setCategory] = useState<ExpenseCategory>(
-    expense?.category ?? '청소비',
+    expense?.category ?? (prefs.lastCategory as ExpenseCategory) ?? '청소비',
   );
-  const [amount, setAmount] = useState(expense?.amount ?? 0);
+  const [amountStr, setAmountStr] = useState(
+    expense ? formatAmountInput(String(expense.amount)) : '',
+  );
   const [date, setDate] = useState(expense?.date ?? todayYmd());
   const [notes, setNotes] = useState(expense?.notes ?? '');
+  const [keepOpen, setKeepOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const data: Omit<Expense, 'id'> = {
+    const amount = parseAmount(amountStr);
+    const data = {
       propertyId,
       category,
       amount,
       date,
       notes: notes.trim() || undefined,
-      createdAt: expense?.createdAt ?? Date.now(),
     };
-    if (expense?.id) {
-      await db.expenses.update(expense.id, data);
-    } else {
-      await db.expenses.add(data as Expense);
+
+    setSubmitting(true);
+    try {
+      if (expense?.id) {
+        await updateExpense(expense.id, data);
+      } else {
+        await addExpense(data);
+      }
+      savePrefs({
+        lastCategory: category,
+        lastExpensePropertyId: propertyId,
+      });
+
+      if (keepOpen && !expense) {
+        setAmountStr('');
+        setNotes('');
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      alert(
+        '저장 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   };
 
   const handleDelete = async () => {
     if (!expense?.id) return;
-    if (confirm('이 비용을 삭제할까요?')) {
-      await db.expenses.delete(expense.id);
+    if (!confirm('이 비용을 삭제할까요?')) return;
+    setSubmitting(true);
+    try {
+      await deleteExpense(expense.id);
       onClose();
+    } catch (err) {
+      alert(
+        '삭제 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -56,7 +100,7 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
           <select
             value={propertyId === null ? '' : propertyId}
             onChange={(e) =>
-              setPropertyId(e.target.value === '' ? null : Number(e.target.value))
+              setPropertyId(e.target.value === '' ? null : e.target.value)
             }
           >
             <option value="">공통 (모든 숙소)</option>
@@ -82,16 +126,18 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
         </label>
         <label>
           금액 (KRW)
-          <input
-            type="number"
-            min={0}
-            step={1000}
-            inputMode="numeric"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
-            required
-            autoFocus
-          />
+          <div className="amount-input">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={amountStr}
+              onChange={(e) => setAmountStr(formatAmountInput(e.target.value))}
+              required
+              autoFocus
+              placeholder="0"
+            />
+            <span className="amount-suffix">원</span>
+          </div>
         </label>
         <label>
           날짜
@@ -107,9 +153,21 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={3}
+            rows={2}
           />
         </label>
+
+        {!expense && (
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={keepOpen}
+              onChange={(e) => setKeepOpen(e.target.checked)}
+            />
+            <span>이어서 추가하기 (저장 후 폼 유지)</span>
+          </label>
+        )}
+
         <div className="form-actions">
           {expense && (
             <button
@@ -117,15 +175,25 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
               className="btn"
               style={{ color: 'var(--neg)' }}
               onClick={handleDelete}
+              disabled={submitting}
             >
               삭제
             </button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <button
+            type="button"
+            className="btn"
+            onClick={onClose}
+            disabled={submitting}
+          >
             취소
           </button>
-          <button type="submit" className="btn primary">
-            저장
+          <button
+            type="submit"
+            className="btn primary"
+            disabled={submitting}
+          >
+            {submitting ? '저장 중…' : '저장'}
           </button>
         </div>
       </form>

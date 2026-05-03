@@ -4,10 +4,11 @@ import { db } from '../db';
 import { Booking } from '../types';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW } from '../utils';
+import { deleteBooking } from '../sync';
 import { BookingForm } from './BookingForm';
 
 export function Bookings() {
-  const [filterProperty, setFilterProperty] = useState<number | 'all'>('all');
+  const [filterProperty, setFilterProperty] = useState<string | 'all'>('all');
   const [editing, setEditing] = useState<Booking | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -36,9 +37,14 @@ export function Bookings() {
     setEditing(b);
     setShowForm(true);
   };
-  const handleDelete = async (id: number) => {
-    if (confirm('이 예약을 삭제할까요?')) {
-      await db.bookings.delete(id);
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 예약을 삭제할까요?')) return;
+    try {
+      await deleteBooking(id);
+    } catch (err) {
+      alert(
+        '삭제 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
     }
   };
 
@@ -63,7 +69,7 @@ export function Bookings() {
             <button
               key={p.id}
               className={filterProperty === p.id ? 'active' : ''}
-              onClick={() => setFilterProperty(p.id!)}
+              onClick={() => setFilterProperty(p.id)}
             >
               <span className="dot" style={{ background: p.color }} />
               {p.name}
@@ -85,6 +91,11 @@ export function Bookings() {
                 key={b.id}
                 className="list-item"
                 onClick={() => handleEdit(b)}
+                style={
+                  prop
+                    ? { borderLeft: `3px solid ${prop.color}` }
+                    : undefined
+                }
               >
                 <div className="item-main">
                   <div className="item-title">
@@ -92,15 +103,7 @@ export function Bookings() {
                     <span className="muted"> · {country?.name ?? b.country}</span>
                   </div>
                   <div className="item-meta">
-                    {prop && (
-                      <>
-                        <span
-                          className="dot"
-                          style={{ background: prop.color }}
-                        />
-                        {prop.name} ·{' '}
-                      </>
-                    )}
+                    {prop && <>{prop.name} · </>}
                     {b.checkIn} · {b.nights}박 {b.guests}인 ·{' '}
                     {platform?.emoji} {platform?.label}
                   </div>
@@ -111,7 +114,7 @@ export function Bookings() {
                     className="del"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(b.id!);
+                      handleDelete(b.id);
                     }}
                     aria-label="삭제"
                   >

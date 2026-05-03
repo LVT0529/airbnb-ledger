@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Expense } from '../types';
 import { formatKRW } from '../utils';
+import { deleteExpense } from '../sync';
 import { ExpenseForm } from './ExpenseForm';
 
-type Filter = 'all' | 'shared' | number;
+type Filter = 'all' | 'shared' | string;
 
 export function Expenses() {
   const [filterProperty, setFilterProperty] = useState<Filter>('all');
@@ -31,8 +32,15 @@ export function Expenses() {
     setEditing(e);
     setShowForm(true);
   };
-  const handleDelete = async (id: number) => {
-    if (confirm('이 비용을 삭제할까요?')) await db.expenses.delete(id);
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 비용을 삭제할까요?')) return;
+    try {
+      await deleteExpense(id);
+    } catch (err) {
+      alert(
+        '삭제 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
+    }
   };
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
@@ -57,7 +65,7 @@ export function Expenses() {
           <button
             key={p.id}
             className={filterProperty === p.id ? 'active' : ''}
-            onClick={() => setFilterProperty(p.id!)}
+            onClick={() => setFilterProperty(p.id)}
           >
             <span className="dot" style={{ background: p.color }} />
             {p.name}
@@ -91,22 +99,16 @@ export function Expenses() {
                 key={ex.id}
                 className="list-item"
                 onClick={() => handleEdit(ex)}
+                style={
+                  prop
+                    ? { borderLeft: `3px solid ${prop.color}` }
+                    : { borderLeft: `3px solid var(--muted)` }
+                }
               >
                 <div className="item-main">
                   <div className="item-title">{ex.category}</div>
                   <div className="item-meta">
-                    {prop ? (
-                      <>
-                        <span
-                          className="dot"
-                          style={{ background: prop.color }}
-                        />
-                        {prop.name} ·{' '}
-                      </>
-                    ) : (
-                      '공통 · '
-                    )}
-                    {ex.date}
+                    {prop ? prop.name : '공통'} · {ex.date}
                     {ex.notes && ` · ${ex.notes}`}
                   </div>
                 </div>
@@ -116,7 +118,7 @@ export function Expenses() {
                     className="del"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(ex.id!);
+                      handleDelete(ex.id);
                     }}
                     aria-label="삭제"
                   >
