@@ -10,6 +10,8 @@ interface Props {
   thickness?: number;
   centerLabel?: string;
   centerValue?: string;
+  hoveredIndex?: number | null;
+  onHoverChange?: (i: number | null) => void;
 }
 
 export function DonutChart({
@@ -18,6 +20,8 @@ export function DonutChart({
   thickness = 22,
   centerLabel,
   centerValue,
+  hoveredIndex = null,
+  onHoverChange,
 }: Props) {
   const total = segments.reduce((s, d) => s + d.value, 0);
   const radius = (size - thickness) / 2;
@@ -33,6 +37,7 @@ export function DonutChart({
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       className="donut"
+      onMouseLeave={() => onHoverChange?.(null)}
     >
       <circle
         cx={cx}
@@ -47,6 +52,8 @@ export function DonutChart({
           const fraction = s.value / total;
           const dash = fraction * circumference;
           const gap = circumference - dash;
+          const isHovered = hoveredIndex === i;
+          const isDimmed = hoveredIndex !== null && !isHovered;
           const seg = (
             <circle
               key={i}
@@ -55,13 +62,24 @@ export function DonutChart({
               r={radius}
               fill="none"
               stroke={s.color}
-              strokeWidth={thickness}
+              strokeWidth={isHovered ? thickness + 4 : thickness}
               strokeDasharray={`${dash} ${gap}`}
               strokeDashoffset={-offset}
               strokeLinecap="butt"
               transform={`rotate(-90 ${cx} ${cy})`}
-              style={{ transition: 'stroke-dasharray 0.5s ease-out' }}
-            />
+              opacity={isDimmed ? 0.35 : 1}
+              onMouseEnter={() => onHoverChange?.(i)}
+              onTouchStart={() =>
+                onHoverChange?.(hoveredIndex === i ? null : i)
+              }
+              style={{
+                transition:
+                  'stroke-width 0.15s ease, opacity 0.15s ease',
+                cursor: onHoverChange ? 'pointer' : 'default',
+              }}
+            >
+              <title>{`${s.label} · ${s.value.toLocaleString('ko-KR')}원`}</title>
+            </circle>
           );
           offset += dash;
           return seg;

@@ -240,84 +240,24 @@ export function Dashboard() {
       {(revenueSegments.length > 0 || expenseSegments.length > 0) && (
         <div className="donut-grid">
           {revenueSegments.length > 0 && (
-            <div className="donut-card">
-              <div className="donut-card-header">
-                <span className="eyebrow">매출 구성</span>
-                <span className="donut-card-total tabular">
-                  ₩ {formatKRWBare(totalRevenue)}
-                </span>
-              </div>
-              <div className="donut-wrap">
-                <DonutChart
-                  segments={revenueSegments}
-                  centerLabel="숙소 수"
-                  centerValue={String(revenueSegments.length)}
-                />
-              </div>
-              <ul className="donut-legend">
-                {revenueSegments.map((s) => {
-                  const pct =
-                    totalRevenue > 0 ? (s.value / totalRevenue) * 100 : 0;
-                  return (
-                    <li key={s.label}>
-                      <span
-                        className="legend-dot"
-                        style={{ background: s.color }}
-                      />
-                      <span className="legend-name">{s.label}</span>
-                      <span className="legend-pct tabular">
-                        {pct.toFixed(0)}%
-                      </span>
-                      <span className="legend-amount tabular">
-                        ₩ {formatKRWBare(s.value)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <DonutSection
+              title="매출 구성"
+              total={totalRevenue}
+              segments={revenueSegments}
+              defaultLabel="숙소 수"
+              defaultValue={String(revenueSegments.length)}
+            />
           )}
 
           {expenseSegments.length > 0 && (
-            <div className="donut-card">
-              <div className="donut-card-header">
-                <span className="eyebrow">비용 구성</span>
-                <span
-                  className="donut-card-total tabular"
-                  style={{ color: 'var(--neg)' }}
-                >
-                  − ₩ {formatKRWBare(totalExpense)}
-                </span>
-              </div>
-              <div className="donut-wrap">
-                <DonutChart
-                  segments={expenseSegments}
-                  centerLabel="항목"
-                  centerValue={String(expenseSegments.length)}
-                />
-              </div>
-              <ul className="donut-legend">
-                {expenseSegments.map((s) => {
-                  const pct =
-                    totalExpense > 0 ? (s.value / totalExpense) * 100 : 0;
-                  return (
-                    <li key={s.label}>
-                      <span
-                        className="legend-dot"
-                        style={{ background: s.color }}
-                      />
-                      <span className="legend-name">{s.label}</span>
-                      <span className="legend-pct tabular">
-                        {pct.toFixed(0)}%
-                      </span>
-                      <span className="legend-amount tabular">
-                        ₩ {formatKRWBare(s.value)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <DonutSection
+              title="비용 구성"
+              total={totalExpense}
+              segments={expenseSegments}
+              defaultLabel="항목"
+              defaultValue={String(expenseSegments.length)}
+              negative
+            />
           )}
         </div>
       )}
@@ -497,3 +437,80 @@ export function Dashboard() {
 
 // formatKRW used elsewhere
 export { formatKRW };
+
+interface DonutSectionProps {
+  title: string;
+  total: number;
+  segments: { label: string; value: number; color: string }[];
+  defaultLabel: string;
+  defaultValue: string;
+  negative?: boolean;
+}
+
+function DonutSection({
+  title,
+  total,
+  segments,
+  defaultLabel,
+  defaultValue,
+  negative,
+}: DonutSectionProps) {
+  const [hover, setHover] = useState<number | null>(null);
+  const active = hover !== null ? segments[hover] : null;
+
+  const centerLabel = active ? active.label : defaultLabel;
+  const centerValue = active
+    ? formatKRWBare(active.value)
+    : defaultValue;
+
+  return (
+    <div className="donut-card">
+      <div className="donut-card-header">
+        <span className="eyebrow">{title}</span>
+        <span
+          className="donut-card-total tabular"
+          style={negative ? { color: 'var(--neg)' } : undefined}
+        >
+          {negative ? '− ' : ''}₩ {formatKRWBare(total)}
+        </span>
+      </div>
+      <div className="donut-wrap">
+        <DonutChart
+          segments={segments}
+          centerLabel={centerLabel}
+          centerValue={centerValue}
+          hoveredIndex={hover}
+          onHoverChange={setHover}
+        />
+      </div>
+      <ul className="donut-legend">
+        {segments.map((s, i) => {
+          const pct = total > 0 ? (s.value / total) * 100 : 0;
+          const isActive = hover === i;
+          const isDimmed = hover !== null && !isActive;
+          return (
+            <li
+              key={s.label}
+              className={`${isActive ? 'active' : ''} ${
+                isDimmed ? 'dimmed' : ''
+              }`}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              onClick={() => setHover(hover === i ? null : i)}
+            >
+              <span
+                className="legend-dot"
+                style={{ background: s.color }}
+              />
+              <span className="legend-name">{s.label}</span>
+              <span className="legend-pct tabular">{pct.toFixed(0)}%</span>
+              <span className="legend-amount tabular">
+                ₩ {formatKRWBare(s.value)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}

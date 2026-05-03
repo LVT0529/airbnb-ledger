@@ -475,11 +475,21 @@ input, button, select, textarea {
   grid-template-columns: 12px 1fr auto auto;
   gap: 10px;
   align-items: center;
-  padding: 9px 0;
+  padding: 9px 4px;
+  margin: 0 -4px;
   border-top: 1px solid var(--line);
   font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, opacity 0.15s;
 }
 .donut-legend li:first-child { border-top: none; }
+.donut-legend li.active {
+  background: var(--bg-elevated);
+}
+.donut-legend li.dimmed {
+  opacity: 0.45;
+}
 .legend-dot {
   width: 10px;
   height: 10px;
