@@ -88,13 +88,13 @@ export function Login() {
               {loading ? '보내는 중…' : '인증 코드 받기'}
             </button>
             <p className="muted small">
-              입력하신 이메일로 6자리 코드를 보내드려요.
+              입력하신 이메일로 인증 코드를 보내드려요.
             </p>
           </form>
         ) : (
           <form onSubmit={verifyCode} className="form">
             <p className="muted small" style={{ textAlign: 'center' }}>
-              <strong>{email}</strong>로 보낸 6자리 코드를 입력하세요
+              <strong>{email}</strong>로 보낸 인증 코드를 입력하세요
             </p>
             <label>
               인증 코드
@@ -102,16 +102,16 @@ export function Login() {
                 type="text"
                 value={code}
                 onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                  setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                 }
                 required
                 autoFocus
-                placeholder="000000"
+                placeholder="00000000"
                 inputMode="numeric"
-                pattern="[0-9]{6}"
+                pattern="[0-9]{6,10}"
                 autoComplete="one-time-code"
-                maxLength={6}
-                style={{ fontSize: 22, letterSpacing: 6, textAlign: 'center' }}
+                maxLength={10}
+                style={{ fontSize: 22, letterSpacing: 4, textAlign: 'center' }}
               />
             </label>
             {error && <div className="error">{error}</div>}
