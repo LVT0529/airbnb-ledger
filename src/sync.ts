@@ -402,3 +402,183 @@ export async function syncAllIcals(
   }
   return total;
 }
+
+// =================================================================
+// Airbnb 수익 CSV import
+// =================================================================
+
+export interface ParsedAirbnbRow {
+  date: string;
+  confirmationCode?: string;
+  guestName: string;
+  listing: string;
+  nights: number;
+  amount: number;
+  type: string;
+}
+
+export interface AirbnbCsvImportResult {
+  total: number;
+  matched: number;
+  inserted: number;
+  skipped: number;
+  errors: string[];
+}
+
+function findHeaderKey(
+  headers: string[],
+  ...needles: string[]
+): string | undefined {
+  return headers.find((h) =>
+    needles.some((n) => h.toLowerCase().includes(n.toLowerCase())),
+  );
+}
+
+export function parseAirbnbCsvRows(
+  rows: Record<string, string>[],
+): ParsedAirbnbRow[] {
+  if (rows.length === 0) return [];
+  const headers = Object.keys(rows[0]);
+
+  const dateKey = findHeaderKey(headers, 'start date', '시작일', '체크인', '예약된 날짜');
+  const typeKey = findHeaderKey(headers, 'type', '유형');
+  const codeKey = findHeaderKey(headers, 'confirmation code', '확인 번호', '확인번호');
+  const guestKey = findHeaderKey(headers, 'guest', '게스트');
+  const listingKey = findHeaderKey(headers, 'listing', '숙소');
+  const nightsKey = findHeaderKey(headers, 'nights', '박수');
+  const amountKey = findHeaderKey(
+    headers,
+    'paid out',
+    'amount',
+    'earnings',
+    'gross earnings',
+    '지급액',
+    '수입',
+    '총액',
+    '금액',
+  );
+
+  const parsed: ParsedAirbnbRow[] = [];
+  for (const r of rows) {
+    const type = typeKey ? r[typeKey] : '';
+    if (typeKey && type && !/reservation|예약/i.test(type)) continue;
+
+    const dateRaw = dateKey ? r[dateKey] : '';
+    const date = normalizeDate(dateRaw);
+    if (!date) continue;
+
+    const amountStr = amountKey ? r[amountKey] : '0';
+    const amount = parseAmountFromCsv(amountStr);
+
+    parsed.push({
+      date,
+      confirmationCode: codeKey ? r[codeKey].trim() || undefined : undefined,
+      guestName: guestKey ? r[guestKey].trim() : '',
+      listing: listingKey ? r[listingKey].trim() : '',
+      nights: nightsKey ? Number(r[nightsKey]) || 0 : 0,
+      amount,
+      type,
+    });
+  }
+  return parsed;
+}
+
+function normalizeDate(s: string): string {
+  if (!s) return '';
+  // YYYY-MM-DD
+  let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  // MM/DD/YYYY
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  // YYYY/MM/DD
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return '';
+}
+
+function parseAmountFromCsv(s: string): number {
+  if (!s) return 0;
+  const cleaned = s.replace(/[^\d.-]/g, '');
+  const n = Number(cleaned);
+  return isNaN(n) ? 0 : Math.round(n);
+}
+
+export async function importAirbnbCsv(
+  parsed: ParsedAirbnbRow[],
+  listingMap: Record<string, string>, // listing name → propertyId
+): Promise<AirbnbCsvImportResult> {
+  const result: AirbnbCsvImportResult = {
+    total: parsed.length,
+    matched: 0,
+    inserted: 0,
+    skipped: 0,
+    errors: [],
+  };
+  const userId = await getUserId();
+
+  for (const row of parsed) {
+    try {
+      const propertyId = listingMap[row.listing];
+      if (!propertyId) {
+        result.skipped++;
+        continue;
+      }
+
+      // 기존 confirmation code 매칭 시도
+      if (row.confirmationCode) {
+        const existing = await supabase
+          .from('bookings')
+          .select('id, status')
+          .eq('confirmation_code', row.confirmationCode)
+          .maybeSingle();
+
+        if (existing.data) {
+          // 매출 + 게스트명 update + status confirmed
+          const upd = await supabase
+            .from('bookings')
+            .update({
+              guest_name: row.guestName || existing.data.id,
+              revenue: row.amount,
+              status: 'confirmed',
+            })
+            .eq('id', existing.data.id);
+          if (upd.error) throw upd.error;
+          result.matched++;
+          continue;
+        }
+      }
+
+      // 매칭 실패 → 새로 insert
+      const checkOut = new Date(row.date);
+      checkOut.setDate(checkOut.getDate() + row.nights);
+      const checkOutStr = checkOut.toISOString().slice(0, 10);
+
+      const ins = await supabase.from('bookings').insert({
+        user_id: userId,
+        property_id: propertyId,
+        guest_name: row.guestName || row.confirmationCode || '게스트',
+        country: 'KR',
+        platform: 'airbnb',
+        guests: 1,
+        nights: row.nights,
+        check_in: row.date,
+        check_out: checkOutStr,
+        revenue: row.amount,
+        confirmation_code: row.confirmationCode ?? null,
+        status: 'confirmed',
+      });
+      if (ins.error) throw ins.error;
+      result.inserted++;
+    } catch (e) {
+      result.errors.push(
+        `${row.guestName || row.confirmationCode || row.date}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  await syncAll();
+  return result;
+}

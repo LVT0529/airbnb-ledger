@@ -92,3 +92,64 @@ export function savePrefs(patch: Partial<Prefs>): void {
   const current = loadPrefs();
   localStorage.setItem(PREFS_KEY, JSON.stringify({ ...current, ...patch }));
 }
+
+export function parseCSV(text: string): Record<string, string>[] {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+
+  const lines: string[] = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+      cur += ch;
+    } else if ((ch === '\n' || ch === '\r') && !inQuote) {
+      if (cur) lines.push(cur);
+      cur = '';
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) lines.push(cur);
+
+  if (lines.length === 0) return [];
+
+  const parseRow = (line: string): string[] => {
+    const cells: string[] = [];
+    let cell = '';
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (q && line[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          q = !q;
+        }
+      } else if (ch === ',' && !q) {
+        cells.push(cell);
+        cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    cells.push(cell);
+    return cells.map((c) => c.trim());
+  };
+
+  const headers = parseRow(lines[0]);
+  return lines
+    .slice(1)
+    .filter((l) => l.trim())
+    .map((line) => {
+      const row = parseRow(line);
+      const obj: Record<string, string> = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i] ?? '';
+      });
+      return obj;
+    });
+}

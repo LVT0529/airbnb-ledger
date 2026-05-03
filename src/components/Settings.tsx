@@ -14,6 +14,7 @@ import {
 } from '../sync';
 import { supabase } from '../supabase';
 import { Modal } from './Modal';
+import { AirbnbImportModal } from './AirbnbImportModal';
 
 const COLORS = ['#FF5A5F', '#00A699', '#FC642D', '#5C6BC0', '#FFB400', '#7B61FF'];
 
@@ -27,6 +28,7 @@ export function Settings() {
   const [icalUrl, setIcalUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showAirbnbImport, setShowAirbnbImport] = useState(false);
 
   const startEdit = (target: Property | 'new') => {
     setEditing(target);
@@ -340,6 +342,27 @@ export function Settings() {
         </section>
       )}
 
+      {properties.length > 0 && (
+        <section className="section">
+          <h2>Airbnb 수익 가져오기</h2>
+          <div className="card">
+            <button
+              className="btn primary block"
+              onClick={() => setShowAirbnbImport(true)}
+            >
+              CSV 가져오기 (매출 자동 채우기)
+            </button>
+            <p className="muted small">
+              Airbnb 호스트 → 거래내역 → CSV 다운로드 후 업로드하면
+              <br />
+              ① iCal로 들어온 임시 예약의 매출이 자동으로 채워지고
+              <br />
+              ② 새 예약은 confirmed 상태로 추가됩니다.
+            </p>
+          </div>
+        </section>
+      )}
+
       <section className="section">
         <h2>내보내기</h2>
         <div className="card">
@@ -378,6 +401,13 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      {showAirbnbImport && (
+        <AirbnbImportModal
+          properties={properties}
+          onClose={() => setShowAirbnbImport(false)}
+        />
+      )}
 
       {editing && (
         <Modal
