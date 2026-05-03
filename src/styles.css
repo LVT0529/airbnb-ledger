@@ -539,28 +539,45 @@ input, button, select, textarea {
 
 .cal-bar {
   position: absolute;
-  height: 17px;
-  border-radius: 3px;
+  height: 18px;
+  border-radius: 4px;
   color: white;
   font-family: var(--sans);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  padding: 1px 6px;
+  padding: 0 5px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 3px;
   z-index: 1;
-  margin: 0 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
 }
 .cal-bar.pending {
-  opacity: 0.65;
+  opacity: 0.7;
   background: var(--pending) !important;
   border: 1px dashed rgba(255, 255, 255, 0.7);
+}
+.cal-bar-emoji {
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
+}
+.cal-bar-flag {
+  font-size: 10px;
+  line-height: 1;
+}
+.cal-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .cal-sync-row {

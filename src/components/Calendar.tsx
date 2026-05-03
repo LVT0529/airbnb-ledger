@@ -230,7 +230,7 @@ export function Calendar() {
     : [];
 
   const numWeeks = cells.length / 7;
-  const ROW_HEIGHT = Math.max(maxRow, 1) * 18 + 26; // 1 row min
+  const ROW_HEIGHT = Math.max(maxRow, 1) * 19 + 30;
 
   return (
     <div className="screen">
@@ -312,29 +312,55 @@ export function Calendar() {
               .map((bar) => {
                 const prop = propMap.get(bar.booking.propertyId);
                 const isPending = bar.booking.status === 'pending';
+                const platform = PLATFORMS.find(
+                  (p) => p.value === bar.booking.platform,
+                );
+                const leftPct = (bar.startCol / 7) * 100;
+                const rightPct =
+                  ((7 - bar.startCol - bar.span) / 7) * 100;
                 return (
                   <div
                     key={bar.booking.id}
                     className={`cal-bar ${isPending ? 'pending' : ''}`}
                     style={{
-                      gridColumnStart: bar.startCol + 1,
-                      gridColumnEnd: `span ${bar.span}`,
-                      top: bar.rowIndex * 18 + 22,
+                      left: `calc(${leftPct}% + 2px)`,
+                      right: `calc(${rightPct}% + 2px)`,
+                      top: bar.rowIndex * 19 + 24,
                       background: prop?.color ?? '#888',
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditing(bar.booking);
                     }}
-                    title={`${bar.booking.guestName} (${bar.booking.checkIn} ~ ${bar.booking.checkOut})`}
+                    title={`${bar.booking.guestName} · ${platform?.label ?? ''} (${bar.booking.checkIn} ~ ${bar.booking.checkOut})`}
                   >
-                    {bar.span >= 2 ? (
+                    {bar.span >= 3 ? (
                       <>
-                        {isPending ? '·' : flagEmoji(bar.booking.country)}{' '}
-                        {bar.booking.guestName}
+                        <span className="cal-bar-emoji">
+                          {platform?.emoji ?? '·'}
+                        </span>
+                        {!isPending && (
+                          <span className="cal-bar-flag">
+                            {flagEmoji(bar.booking.country)}
+                          </span>
+                        )}
+                        <span className="cal-bar-name">
+                          {bar.booking.guestName}
+                        </span>
+                      </>
+                    ) : bar.span === 2 ? (
+                      <>
+                        <span className="cal-bar-emoji">
+                          {platform?.emoji ?? '·'}
+                        </span>
+                        <span className="cal-bar-name">
+                          {bar.booking.guestName}
+                        </span>
                       </>
                     ) : (
-                      <>·</>
+                      <span className="cal-bar-emoji">
+                        {platform?.emoji ?? '·'}
+                      </span>
                     )}
                   </div>
                 );
