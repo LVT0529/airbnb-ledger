@@ -28,7 +28,7 @@
   --serif: 'Fraunces', 'Pretendard Variable', 'Pretendard', ui-serif, Georgia, serif;
   --sans: 'Bricolage Grotesque', 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --kor: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --num: 'Fraunces', 'Pretendard Variable', ui-serif, serif;
+  --num: 'Pretendard Variable', 'Pretendard', 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -264,11 +264,10 @@ input, button, select, textarea {
 
 .dash-net {
   font-family: var(--num);
-  font-variation-settings: 'opsz' 144, 'SOFT' 30;
   font-size: clamp(48px, 13vw, 72px);
-  font-weight: 500;
-  letter-spacing: -0.035em;
-  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
   margin: 0 0 8px;
   font-variant-numeric: tabular-nums;
 }
@@ -313,9 +312,8 @@ input, button, select, textarea {
 }
 .dash-split-amount {
   font-family: var(--num);
-  font-variation-settings: 'opsz' 144;
-  font-size: 22px;
-  font-weight: 500;
+  font-size: 21px;
+  font-weight: 600;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -336,7 +334,7 @@ input, button, select, textarea {
 .dash-stat-value {
   font-family: var(--num);
   font-size: 24px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.02em;
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
@@ -390,7 +388,7 @@ input, button, select, textarea {
 .dash-property-row .label { color: var(--ink-muted); }
 .dash-property-row .value {
   font-family: var(--num);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .dash-property-row.profit { padding-top: 10px; border-top: 1px solid var(--line); margin-top: 8px; }
@@ -409,7 +407,7 @@ input, button, select, textarea {
 .bar-fill { height: 100%; background: var(--accent); transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .bar-value {
   font-family: var(--num);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -596,8 +594,8 @@ input, button, select, textarea {
   align-items: center;
   gap: 6px;
   font-family: var(--num);
-  font-weight: 500;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 15px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -850,9 +848,8 @@ input, button, select, textarea {
   padding: 16px 44px 16px 18px !important;
   text-align: right;
   font-family: var(--num) !important;
-  font-variation-settings: 'opsz' 144;
-  font-size: 28px !important;
-  font-weight: 500 !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
   letter-spacing: -0.02em !important;
   font-variant-numeric: tabular-nums;
   background: var(--bg-elevated) !important;
@@ -861,8 +858,8 @@ input, button, select, textarea {
   position: absolute;
   right: 16px;
   color: var(--ink-muted);
-  font-family: var(--serif);
-  font-size: 18px;
+  font-family: var(--sans);
+  font-size: 15px;
   font-weight: 500;
   pointer-events: none;
 }

@@ -164,11 +164,11 @@ export function Login() {
                     autoComplete="one-time-code"
                     maxLength={10}
                     style={{
-                      fontSize: 26,
+                      fontSize: 24,
                       letterSpacing: 6,
                       textAlign: 'center',
-                      fontFamily: 'var(--num)',
-                      fontWeight: 500,
+                      fontFamily: 'var(--sans)',
+                      fontWeight: 700,
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   />
