@@ -7,24 +7,16 @@ class AppDB extends Dexie {
   expenses!: Table<Expense, string>;
 
   constructor() {
-    super('airbnb-ledger');
+    super('airbnb-ledger-v2');
     this.version(1).stores({
-      properties: '++id, name, createdAt',
-      bookings: '++id, propertyId, checkIn, platform, country, createdAt',
-      expenses: '++id, propertyId, category, date, createdAt',
+      properties: 'id, name, createdAt',
+      bookings: 'id, propertyId, checkIn, platform, country, createdAt',
+      expenses: 'id, propertyId, category, date, createdAt',
     });
-    this.version(2)
-      .stores({
-        properties: 'id, name, createdAt',
-        bookings: 'id, propertyId, checkIn, platform, country, createdAt',
-        expenses: 'id, propertyId, category, date, createdAt',
-      })
-      .upgrade(async (tx) => {
-        await tx.table('properties').clear();
-        await tx.table('bookings').clear();
-        await tx.table('expenses').clear();
-      });
   }
 }
 
 export const db = new AppDB();
+
+// 기존 v1 DB(auto-increment id 기반)가 남아있으면 정리
+Dexie.delete('airbnb-ledger').catch(() => {});
