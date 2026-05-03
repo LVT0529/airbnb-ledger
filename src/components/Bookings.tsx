@@ -86,10 +86,11 @@ export function Bookings() {
             const prop = properties.find((p) => p.id === b.propertyId);
             const country = COUNTRIES.find((c) => c.code === b.country);
             const platform = PLATFORMS.find((p) => p.value === b.platform);
+            const isPending = b.status === 'pending';
             return (
               <div
                 key={b.id}
-                className="list-item"
+                className={`list-item ${isPending ? 'pending' : ''}`}
                 onClick={() => handleEdit(b)}
                 style={
                   prop
@@ -99,17 +100,32 @@ export function Bookings() {
               >
                 <div className="item-main">
                   <div className="item-title">
-                    {flagEmoji(b.country)} {b.guestName}
-                    <span className="muted"> · {country?.name ?? b.country}</span>
+                    {isPending ? (
+                      <>
+                        <span className="pending-badge">매출 미입력</span>{' '}
+                        {b.confirmationCode ?? b.guestName}
+                      </>
+                    ) : (
+                      <>
+                        {flagEmoji(b.country)} {b.guestName}
+                        <span className="muted"> · {country?.name ?? b.country}</span>
+                      </>
+                    )}
                   </div>
                   <div className="item-meta">
                     {prop && <>{prop.name} · </>}
-                    {b.checkIn} · {b.nights}박 {b.guests}인 ·{' '}
-                    {platform?.emoji} {platform?.label}
+                    {b.checkIn} · {b.nights}박
+                    {!isPending && (
+                      <>
+                        {' '}{b.guests}인 · {platform?.emoji} {platform?.label}
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="item-amount">
-                  <span>{formatKRW(b.revenue)}</span>
+                  <span className={isPending ? 'muted' : ''}>
+                    {isPending ? '입력 필요' : formatKRW(b.revenue)}
+                  </span>
                   <button
                     className="del"
                     onClick={(e) => {

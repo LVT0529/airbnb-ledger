@@ -84,6 +84,8 @@ export function BookingForm({ booking, properties, onClose }: Props) {
       checkOut: addDays(checkIn, nights),
       revenue,
       notes: notes.trim() || undefined,
+      confirmationCode: booking?.confirmationCode,
+      status: 'confirmed' as const,
     };
 
     setSubmitting(true);
@@ -131,9 +133,42 @@ export function BookingForm({ booking, properties, onClose }: Props) {
     }
   };
 
+  const isPending = booking?.status === 'pending';
+
   return (
-    <Modal title={booking ? '예약 수정' : '예약 추가'} onClose={onClose}>
+    <Modal
+      title={
+        booking
+          ? isPending
+            ? '예약 정보 입력 (iCal에서 가져옴)'
+            : '예약 수정'
+          : '예약 추가'
+      }
+      onClose={onClose}
+    >
       <form onSubmit={handleSubmit} className="form">
+        {isPending && (
+          <div
+            className="muted small"
+            style={{
+              background: 'rgba(255, 180, 0, 0.12)',
+              border: '1px solid rgba(255, 180, 0, 0.4)',
+              padding: 10,
+              borderRadius: 8,
+              color: 'var(--text)',
+              margin: 0,
+            }}
+          >
+            iCal에서 자동으로 가져온 예약이에요. 게스트 이름·국가·인원·매출을
+            채워서 저장하면 정식 예약으로 등록됩니다.
+            {booking?.confirmationCode && (
+              <>
+                <br />
+                <strong>확인번호:</strong> {booking.confirmationCode}
+              </>
+            )}
+          </div>
+        )}
         <label>
           숙소
           <select

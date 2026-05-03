@@ -452,3 +452,120 @@ input, button, select, textarea {
   height: 18px !important;
   accent-color: var(--primary);
 }
+
+/* Calendar */
+.calendar {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 8px;
+  user-select: none;
+}
+.calendar-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 4px 0;
+}
+.cal-weekday.sun { color: var(--neg); }
+.cal-weekday.sat { color: #4a90e2; }
+
+.cal-week {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-top: 1px solid var(--border);
+}
+.cal-day {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 4px;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  border-right: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.cal-day:last-child { border-right: none; }
+.cal-day.out { color: var(--muted); opacity: 0.5; }
+.cal-day.sun .cal-num { color: var(--neg); }
+.cal-day.sat .cal-num { color: #4a90e2; }
+.cal-day.today .cal-num {
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cal-day.selected {
+  background: rgba(255, 90, 95, 0.08);
+}
+.cal-num {
+  font-weight: 500;
+}
+
+.cal-bar {
+  position: absolute;
+  height: 16px;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  display: grid;
+  pointer-events: auto;
+  z-index: 1;
+  margin: 0 1px;
+}
+.cal-bar.pending {
+  opacity: 0.55;
+  background: var(--muted) !important;
+  border: 1px dashed white;
+}
+
+/* Pending booking */
+.list-item.pending {
+  opacity: 0.85;
+  background: rgba(255, 180, 0, 0.06);
+}
+.pending-badge {
+  display: inline-block;
+  background: rgba(255, 180, 0, 0.2);
+  color: #b88600;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  .pending-badge { color: #ffd166; }
+}
+
+/* Property iCal badge */
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+

@@ -1,6 +1,13 @@
 import { db } from './db';
 import { supabase } from './supabase';
-import { Booking, Expense, Platform, Property } from './types';
+import {
+  Booking,
+  BookingStatus,
+  Expense,
+  Platform,
+  Property,
+} from './types';
+import { diffDays, parseICS } from './icalParser';
 
 type Row = Record<string, unknown>;
 
@@ -9,6 +16,7 @@ function rowToProperty(r: Row): Property {
     id: r.id as string,
     name: r.name as string,
     color: r.color as string,
+    icalUrl: (r.ical_url as string | null) ?? undefined,
     createdAt: new Date(r.created_at as string).getTime(),
   };
 }
@@ -26,6 +34,8 @@ function rowToBooking(r: Row): Booking {
     checkOut: r.check_out as string,
     revenue: Number(r.revenue),
     notes: (r.notes as string | null) ?? undefined,
+    confirmationCode: (r.confirmation_code as string | null) ?? undefined,
+    status: ((r.status as string) ?? 'confirmed') as BookingStatus,
     createdAt: new Date(r.created_at as string).getTime(),
   };
 }
@@ -102,11 +112,18 @@ export function subscribeRealtime(onChange: () => void) {
   };
 }
 
-export async function addProperty(input: Omit<Property, 'id' | 'createdAt'>): Promise<Property> {
+export async function addProperty(
+  input: Omit<Property, 'id' | 'createdAt'>,
+): Promise<Property> {
   const userId = await getUserId();
   const { data, error } = await supabase
     .from('properties')
-    .insert({ user_id: userId, name: input.name, color: input.color })
+    .insert({
+      user_id: userId,
+      name: input.name,
+      color: input.color,
+      ical_url: input.icalUrl ?? null,
+    })
     .select()
     .single();
   if (error) throw error;
@@ -115,10 +132,17 @@ export async function addProperty(input: Omit<Property, 'id' | 'createdAt'>): Pr
   return prop;
 }
 
-export async function updateProperty(id: string, input: Partial<Pick<Property, 'name' | 'color'>>): Promise<void> {
+export async function updateProperty(
+  id: string,
+  input: Partial<Pick<Property, 'name' | 'color' | 'icalUrl'>>,
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.color !== undefined) patch.color = input.color;
+  if (input.icalUrl !== undefined) patch.ical_url = input.icalUrl || null;
   const { data, error } = await supabase
     .from('properties')
-    .update({ name: input.name, color: input.color })
+    .update(patch)
     .eq('id', id)
     .select()
     .single();
@@ -142,7 +166,9 @@ export async function deleteProperty(id: string): Promise<void> {
   );
 }
 
-export async function addBooking(input: Omit<Booking, 'id' | 'createdAt'>): Promise<Booking> {
+export async function addBooking(
+  input: Omit<Booking, 'id' | 'createdAt'>,
+): Promise<Booking> {
   const userId = await getUserId();
   const { data, error } = await supabase
     .from('bookings')
@@ -158,6 +184,8 @@ export async function addBooking(input: Omit<Booking, 'id' | 'createdAt'>): Prom
       check_out: input.checkOut,
       revenue: input.revenue,
       notes: input.notes ?? null,
+      confirmation_code: input.confirmationCode ?? null,
+      status: input.status,
     })
     .select()
     .single();
@@ -167,7 +195,10 @@ export async function addBooking(input: Omit<Booking, 'id' | 'createdAt'>): Prom
   return booking;
 }
 
-export async function updateBooking(id: string, input: Omit<Booking, 'id' | 'createdAt'>): Promise<void> {
+export async function updateBooking(
+  id: string,
+  input: Omit<Booking, 'id' | 'createdAt'>,
+): Promise<void> {
   const { data, error } = await supabase
     .from('bookings')
     .update({
@@ -181,6 +212,8 @@ export async function updateBooking(id: string, input: Omit<Booking, 'id' | 'cre
       check_out: input.checkOut,
       revenue: input.revenue,
       notes: input.notes ?? null,
+      confirmation_code: input.confirmationCode ?? null,
+      status: input.status,
     })
     .eq('id', id)
     .select()
@@ -195,7 +228,9 @@ export async function deleteBooking(id: string): Promise<void> {
   await db.bookings.delete(id);
 }
 
-export async function addExpense(input: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> {
+export async function addExpense(
+  input: Omit<Expense, 'id' | 'createdAt'>,
+): Promise<Expense> {
   const userId = await getUserId();
   const { data, error } = await supabase
     .from('expenses')
@@ -215,7 +250,10 @@ export async function addExpense(input: Omit<Expense, 'id' | 'createdAt'>): Prom
   return expense;
 }
 
-export async function updateExpense(id: string, input: Omit<Expense, 'id' | 'createdAt'>): Promise<void> {
+export async function updateExpense(
+  id: string,
+  input: Omit<Expense, 'id' | 'createdAt'>,
+): Promise<void> {
   const { data, error } = await supabase
     .from('expenses')
     .update({
@@ -240,9 +278,18 @@ export async function deleteExpense(id: string): Promise<void> {
 
 export async function clearAll(): Promise<void> {
   const [props, bks, exps] = await Promise.all([
-    supabase.from('properties').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-    supabase.from('bookings').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-    supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+    supabase
+      .from('properties')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'),
+    supabase
+      .from('bookings')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'),
+    supabase
+      .from('expenses')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'),
   ]);
   if (props.error) throw props.error;
   if (bks.error) throw bks.error;
@@ -258,4 +305,100 @@ export async function clearAll(): Promise<void> {
       await db.expenses.clear();
     },
   );
+}
+
+// =================================================================
+// iCal sync
+// =================================================================
+
+export interface IcalSyncResult {
+  added: number;
+  skipped: number;
+  errors: string[];
+}
+
+export async function syncIcalForProperty(
+  property: Property,
+): Promise<IcalSyncResult> {
+  const result: IcalSyncResult = { added: 0, skipped: 0, errors: [] };
+  if (!property.icalUrl) return result;
+
+  const { data, error } = await supabase.functions.invoke('ical-fetch', {
+    body: { url: property.icalUrl },
+  });
+  if (error) {
+    result.errors.push(error.message);
+    return result;
+  }
+  const ics = (data as { ics?: string })?.ics;
+  if (!ics) {
+    result.errors.push('iCal 응답 비어있음');
+    return result;
+  }
+
+  const events = parseICS(ics).filter((ev) => ev.isReservation);
+
+  const existingRes = await supabase
+    .from('bookings')
+    .select('confirmation_code')
+    .eq('property_id', property.id)
+    .not('confirmation_code', 'is', null);
+  const existingCodes = new Set(
+    (existingRes.data ?? [])
+      .map((r) => r.confirmation_code as string | null)
+      .filter((c): c is string => !!c),
+  );
+
+  const userId = await getUserId();
+  const toInsert: Record<string, unknown>[] = [];
+  for (const ev of events) {
+    if (!ev.confirmationCode) {
+      result.skipped++;
+      continue;
+    }
+    if (existingCodes.has(ev.confirmationCode)) {
+      result.skipped++;
+      continue;
+    }
+    toInsert.push({
+      user_id: userId,
+      property_id: property.id,
+      guest_name: ev.confirmationCode,
+      country: 'KR',
+      platform: 'airbnb',
+      guests: 1,
+      nights: diffDays(ev.start, ev.end),
+      check_in: ev.start,
+      check_out: ev.end,
+      revenue: 0,
+      confirmation_code: ev.confirmationCode,
+      status: 'pending',
+    });
+  }
+
+  if (toInsert.length) {
+    const ins = await supabase.from('bookings').insert(toInsert);
+    if (ins.error) {
+      result.errors.push(ins.error.message);
+    } else {
+      result.added += toInsert.length;
+    }
+  }
+
+  await syncAll();
+  return result;
+}
+
+export async function syncAllIcals(
+  properties: Property[],
+): Promise<IcalSyncResult> {
+  const total: IcalSyncResult = { added: 0, skipped: 0, errors: [] };
+  for (const p of properties) {
+    if (!p.icalUrl) continue;
+    const r = await syncIcalForProperty(p);
+    total.added += r.added;
+    total.skipped += r.skipped;
+    total.errors.push(...r.errors);
+  }
+  return total;
 }

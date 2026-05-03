@@ -9,6 +9,7 @@ import {
   clearAll,
   deleteProperty,
   syncAll,
+  syncAllIcals,
   updateProperty,
 } from '../sync';
 import { supabase } from '../supabase';
@@ -23,16 +24,20 @@ export function Settings() {
   const [editing, setEditing] = useState<EditTarget>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
+  const [icalUrl, setIcalUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const startEdit = (target: Property | 'new') => {
     setEditing(target);
     if (target === 'new') {
       setName('');
       setColor(COLORS[properties.length % COLORS.length]);
+      setIcalUrl('');
     } else {
       setName(target.name);
       setColor(target.color);
+      setIcalUrl(target.icalUrl ?? '');
     }
   };
 
@@ -41,10 +46,15 @@ export function Settings() {
     if (!name.trim()) return;
     setBusy(true);
     try {
+      const url = icalUrl.trim() || undefined;
       if (editing === 'new') {
-        await addProperty({ name: name.trim(), color });
+        await addProperty({ name: name.trim(), color, icalUrl: url });
       } else if (editing) {
-        await updateProperty(editing.id, { name: name.trim(), color });
+        await updateProperty(editing.id, {
+          name: name.trim(),
+          color,
+          icalUrl: url ?? '',
+        });
       }
       setEditing(null);
     } catch (err) {
@@ -53,6 +63,23 @@ export function Settings() {
       );
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSyncIcals = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncAllIcals(properties);
+      const msg = `iCal 동기화 완료\n새 예약 ${result.added}건\n기존/스킵 ${result.skipped}건${
+        result.errors.length ? `\n오류: ${result.errors.join(', ')}` : ''
+      }`;
+      alert(msg);
+    } catch (err) {
+      alert(
+        '동기화 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -263,6 +290,7 @@ export function Settings() {
               <span className="property-row-name">
                 <span className="dot" style={{ background: p.color }} />
                 {p.name}
+                {p.icalUrl && <span className="badge">📅</span>}
               </span>
               <span className="property-row-actions">
                 <button
@@ -292,6 +320,25 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      {properties.some((p) => !!p.icalUrl) && (
+        <section className="section">
+          <h2>iCal 동기화</h2>
+          <div className="card">
+            <button
+              className="btn primary block"
+              onClick={handleSyncIcals}
+              disabled={syncing}
+            >
+              {syncing ? '동기화 중…' : '지금 동기화'}
+            </button>
+            <p className="muted small">
+              Airbnb iCal에 있는 예약을 자동으로 가져와요. 매출/게스트
+              이름은 직접 채워야 합니다.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="section">
         <h2>내보내기</h2>
@@ -363,6 +410,21 @@ export function Settings() {
                   />
                 ))}
               </div>
+            </label>
+            <label>
+              Airbnb iCal URL <span className="muted">(선택)</span>
+              <input
+                type="url"
+                value={icalUrl}
+                onChange={(e) => setIcalUrl(e.target.value)}
+                placeholder="https://www.airbnb.com/calendar/ical/..."
+                inputMode="url"
+                autoComplete="off"
+              />
+              <span className="muted small" style={{ marginTop: 4 }}>
+                Airbnb 호스트 → 캘린더 → 가져오기/내보내기 → iCal 링크
+                복사
+              </span>
             </label>
             <div className="form-actions">
               <button

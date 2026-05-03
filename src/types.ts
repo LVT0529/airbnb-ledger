@@ -4,8 +4,11 @@ export interface Property {
   id: string;
   name: string;
   color: string;
+  icalUrl?: string;
   createdAt: number;
 }
+
+export type BookingStatus = 'confirmed' | 'pending';
 
 export interface Booking {
   id: string;
@@ -19,6 +22,8 @@ export interface Booking {
   checkOut: string;
   revenue: number;
   notes?: string;
+  confirmationCode?: string;
+  status: BookingStatus;
   createdAt: number;
 }
 
