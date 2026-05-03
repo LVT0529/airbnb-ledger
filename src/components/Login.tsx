@@ -38,12 +38,18 @@ export function Login() {
     setError(null);
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim(),
         token: code.trim(),
         type: 'email',
       });
       if (error) throw error;
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '코드가 올바르지 않아요');
     } finally {

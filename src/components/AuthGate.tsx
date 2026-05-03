@@ -19,7 +19,17 @@ export function AuthGate({ children }: Props) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
     });
-    return () => sub.subscription.unsubscribe();
+    const onStorage = async (e: StorageEvent) => {
+      if (e.key && e.key.includes('supabase')) {
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      sub.subscription.unsubscribe();
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   if (loading) {
