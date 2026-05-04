@@ -15,6 +15,7 @@ import {
 import { supabase } from '../supabase';
 import { Modal } from './Modal';
 import { AirbnbImportModal } from './AirbnbImportModal';
+import { ExcelImportModal } from './ExcelImportModal';
 
 interface GmailConnection {
   email: string | null;
@@ -113,6 +114,7 @@ export function Settings() {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAirbnbImport, setShowAirbnbImport] = useState(false);
+  const [showExcelImport, setShowExcelImport] = useState(false);
   const [gmail, setGmail] = useState<GmailConnection | null>(null);
   const [gmailBusy, setGmailBusy] = useState(false);
   const [gmailMessage, setGmailMessage] = useState<string | null>(null);
@@ -622,6 +624,22 @@ export function Settings() {
       )}
 
       <section className="section">
+        <h2>과거 가계부 엑셀 가져오기</h2>
+        <div className="card">
+          <button
+            className="btn primary block"
+            onClick={() => setShowExcelImport(true)}
+          >
+            엑셀 (.xlsx) 가져오기
+          </button>
+          <p className="muted small">
+            "편한가계부" 등 엑셀 파일의 지출 항목을 자동으로 카테고리
+            매핑하여 일괄 추가합니다. 수입은 무시 (iCal/CSV로 처리).
+          </p>
+        </div>
+      </section>
+
+      <section className="section">
         <h2>내보내기</h2>
         <div className="card">
           <button className="btn primary block" onClick={handleExportCSV}>
@@ -664,6 +682,13 @@ export function Settings() {
         <AirbnbImportModal
           properties={properties}
           onClose={() => setShowAirbnbImport(false)}
+        />
+      )}
+
+      {showExcelImport && (
+        <ExcelImportModal
+          properties={properties}
+          onClose={() => setShowExcelImport(false)}
         />
       )}
 
