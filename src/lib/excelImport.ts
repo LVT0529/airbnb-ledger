@@ -32,14 +32,17 @@ export interface ExcelImportPreview {
   expenseTotal: number;
   expenses: ExcelExpenseRow[];
   unmappedCategories: string[];
-  // 수입 (예약)
+  // 수입 (예약 + 기타수입)
   bookingCount: number;
   bookingTotal: number;
   bookings: ExcelBookingRow[];
   bookingsByPlatform: Record<string, number>;
-  // 무시된 수입 (부수입/사은품 등)
-  ignoredIncomeCount: number;
-  ignoredIncomeTotal: number;
+  // 이체 (계좌간 이동, 손익 무관)
+  transferCount: number;
+  transferTotal: number;
+  // 데이터 불완전 (날짜/금액 없음)
+  invalidCount: number;
+  invalidTotal: number;
   errors: string[];
 }
 
@@ -251,8 +254,10 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
   let expenseTotal = 0;
   let bookingCount = 0;
   let bookingTotal = 0;
-  let ignoredIncomeCount = 0;
-  let ignoredIncomeTotal = 0;
+  let transferCount = 0;
+  let transferTotal = 0;
+  let invalidCount = 0;
+  let invalidTotal = 0;
   const bookingsByPlatform: Record<string, number> = {};
 
   for (const row of rows) {
@@ -260,48 +265,88 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
     const amount = asNumber(row['금액'] ?? row['KRW'] ?? row['amount']);
     const date = parseDateValue(row['날짜'] ?? row['date']);
 
+    // 이체는 손익 무관 → 별도 집계 후 skip
+    if (type === '이체' || type === 'transfer') {
+      transferCount++;
+      transferTotal += Math.abs(amount);
+      continue;
+    }
+
     if (type === '수입' || type === 'income') {
       // 수입 처리
       const cls = String(row['분류'] ?? '').trim();
       const sub = String(row['소분류'] ?? '').trim();
-      const platform = parsePlatform(sub);
-      const isBusinessIncome = cls.includes('사업수입') && platform;
+      const platformMaybe = parsePlatform(sub);
+      const isBusinessIncome = cls.includes('사업수입') && platformMaybe;
 
-      if (!isBusinessIncome || !date || amount <= 0) {
-        ignoredIncomeCount++;
-        ignoredIncomeTotal += amount;
+      if (!date || amount <= 0) {
+        invalidCount++;
+        invalidTotal += amount;
         continue;
       }
 
       const description = String(row['내용'] ?? '').trim();
       const memo = String(row['메모'] ?? '').trim();
-      const { country, name } = parseCountryAndName(description);
-      const ng = parseNightsGuests(memo);
-      const nights = Math.max(1, ng.nights ?? 1);
-      const guests = Math.max(1, ng.guests ?? 1);
-      const checkOut = addDays(date, nights);
+
+      if (isBusinessIncome && platformMaybe) {
+        const { country, name } = parseCountryAndName(description);
+        const ng = parseNightsGuests(memo);
+        const nights = Math.max(1, ng.nights ?? 1);
+        const guests = Math.max(1, ng.guests ?? 1);
+        const checkOut = addDays(date, nights);
+
+        bookings.push({
+          checkIn: date,
+          checkOut,
+          guestName: name,
+          country,
+          platform: platformMaybe,
+          guests,
+          nights,
+          revenue: amount,
+          rawDescription: description,
+          rawMemo: memo,
+        });
+        bookingCount++;
+        bookingTotal += amount;
+        bookingsByPlatform[platformMaybe] =
+          (bookingsByPlatform[platformMaybe] ?? 0) + amount;
+        continue;
+      }
+
+      // 사업수입이 아닌 수입(부수입/사은품/이자 등) → '기타 수입' booking으로 등록
+      const labelParts = [cls, sub, description].filter(Boolean);
+      const label = labelParts.join(' · ') || '기타 수입';
+      const checkOut = addDays(date, 1);
 
       bookings.push({
         checkIn: date,
         checkOut,
-        guestName: name,
-        country,
-        platform,
-        guests,
-        nights,
+        guestName: label.length > 40 ? label.slice(0, 40) + '…' : label,
+        country: 'KR',
+        platform: 'other',
+        guests: 1,
+        nights: 1,
         revenue: amount,
         rawDescription: description,
-        rawMemo: memo,
+        rawMemo: [cls, sub, memo].filter(Boolean).join(' · '),
       });
       bookingCount++;
       bookingTotal += amount;
-      bookingsByPlatform[platform] =
-        (bookingsByPlatform[platform] ?? 0) + amount;
+      bookingsByPlatform['other'] = (bookingsByPlatform['other'] ?? 0) + amount;
       continue;
     }
 
-    if (type !== '지출' && type !== 'expense' && type !== '') continue;
-    if (amount <= 0 || !date) continue;
+    if (type !== '지출' && type !== 'expense' && type !== '') {
+      invalidCount++;
+      invalidTotal += amount;
+      continue;
+    }
+    if (amount <= 0 || !date) {
+      invalidCount++;
+      invalidTotal += amount;
+      continue;
+    }
 
     const rawCategory = String(row['분류'] ?? row['category'] ?? '').trim();
     const rawSubcategory = String(
@@ -343,8 +388,10 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
     bookingTotal,
     bookings,
     bookingsByPlatform,
-    ignoredIncomeCount,
-    ignoredIncomeTotal,
+    transferCount,
+    transferTotal,
+    invalidCount,
+    invalidTotal,
     errors,
   };
 }
@@ -360,8 +407,10 @@ function emptyPreview(errors: string[]): ExcelImportPreview {
     bookingTotal: 0,
     bookings: [],
     bookingsByPlatform: {},
-    ignoredIncomeCount: 0,
-    ignoredIncomeTotal: 0,
+    transferCount: 0,
+    transferTotal: 0,
+    invalidCount: 0,
+    invalidTotal: 0,
     errors,
   };
 }

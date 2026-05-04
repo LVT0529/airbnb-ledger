@@ -3,8 +3,23 @@ import { Property } from '../types';
 import { formatKRW } from '../utils';
 import { parseExcelFile, ExcelImportPreview } from '../lib/excelImport';
 import { addBooking, addExpense } from '../sync';
+import { db } from '../db';
 import { PLATFORMS } from '../data';
 import { Modal } from './Modal';
+
+const expenseSig = (e: {
+  date: string;
+  amount: number;
+  category: string;
+  notes?: string | null;
+}) => `${e.date}|${e.amount}|${e.category}|${e.notes ?? ''}`.toLowerCase();
+
+const bookingSig = (b: {
+  checkIn: string;
+  revenue: number;
+  guestName: string;
+  platform: string;
+}) => `${b.checkIn}|${b.revenue}|${b.guestName}|${b.platform}`.toLowerCase();
 
 interface Props {
   properties: Property[];
@@ -23,6 +38,8 @@ export function ExcelImportModal({ properties, onClose }: Props) {
   const [result, setResult] = useState<{
     expensesInserted: number;
     bookingsInserted: number;
+    expensesSkipped: number;
+    bookingsSkipped: number;
     failed: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +84,17 @@ export function ExcelImportModal({ properties, onClose }: Props) {
     setError(null);
     let expensesInserted = 0;
     let bookingsInserted = 0;
+    let expensesSkipped = 0;
+    let bookingsSkipped = 0;
     let failed = 0;
+
+    // 기존 데이터 시그니처를 미리 모아 중복 방지 (propertyId 무관)
+    const [existingExpenses, existingBookings] = await Promise.all([
+      db.expenses.toArray(),
+      db.bookings.toArray(),
+    ]);
+    const expenseSeen = new Set(existingExpenses.map(expenseSig));
+    const bookingSeen = new Set(existingBookings.map(bookingSig));
 
     const total =
       (importExpenses ? preview.expenses.length : 0) +
@@ -76,13 +103,26 @@ export function ExcelImportModal({ properties, onClose }: Props) {
 
     if (importExpenses) {
       for (const ex of preview.expenses) {
+        const notes = [ex.description, ex.notes].filter(Boolean).join(' · ');
+        const sig = expenseSig({
+          date: ex.date,
+          amount: ex.amount,
+          category: ex.category,
+          notes,
+        });
+        if (expenseSeen.has(sig)) {
+          expensesSkipped++;
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
+          continue;
+        }
+        expenseSeen.add(sig);
         try {
           await addExpense({
             propertyId,
             category: ex.category,
             amount: ex.amount,
             date: ex.date,
-            notes: [ex.description, ex.notes].filter(Boolean).join(' · '),
+            notes,
           });
           expensesInserted++;
         } catch {
@@ -94,6 +134,18 @@ export function ExcelImportModal({ properties, onClose }: Props) {
 
     if (importBookings) {
       for (const b of preview.bookings) {
+        const sig = bookingSig({
+          checkIn: b.checkIn,
+          revenue: b.revenue,
+          guestName: b.guestName,
+          platform: b.platform,
+        });
+        if (bookingSeen.has(sig)) {
+          bookingsSkipped++;
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
+          continue;
+        }
+        bookingSeen.add(sig);
         try {
           await addBooking({
             propertyId,
@@ -117,7 +169,13 @@ export function ExcelImportModal({ properties, onClose }: Props) {
       }
     }
 
-    setResult({ expensesInserted, bookingsInserted, failed });
+    setResult({
+      expensesInserted,
+      bookingsInserted,
+      expensesSkipped,
+      bookingsSkipped,
+      failed,
+    });
     setBusy(false);
   };
 
@@ -165,15 +223,29 @@ export function ExcelImportModal({ properties, onClose }: Props) {
                 {preview.expenseCount}건 · −{formatKRW(preview.expenseTotal)}
               </strong>
             </div>
-            {preview.ignoredIncomeCount > 0 && (
+            {preview.transferCount > 0 && (
               <div className="metric">
-                <span>무시됨 (부수입/사은품 등)</span>
+                <span>이체 (계좌간 이동)</span>
                 <strong className="muted">
-                  {preview.ignoredIncomeCount}건 ·{' '}
-                  {formatKRW(preview.ignoredIncomeTotal)}
+                  {preview.transferCount}건 · {formatKRW(preview.transferTotal)}
                 </strong>
               </div>
             )}
+            {preview.invalidCount > 0 && (
+              <div className="metric">
+                <span>건너뜀 (날짜·금액 누락)</span>
+                <strong className="muted">{preview.invalidCount}건</strong>
+              </div>
+            )}
+            <hr />
+            <div className="metric small muted">
+              <span>합계 검증</span>
+              <span>
+                {preview.bookingCount + preview.expenseCount +
+                  preview.transferCount + preview.invalidCount}
+                건 / {preview.totalRows}건
+              </span>
+            </div>
           </div>
 
           {/* 플랫폼별 매출 */}
@@ -304,6 +376,14 @@ export function ExcelImportModal({ properties, onClose }: Props) {
                 {result.expensesInserted}건
               </strong>
             </div>
+            {(result.bookingsSkipped > 0 || result.expensesSkipped > 0) && (
+              <div className="metric">
+                <span>중복 건너뜀</span>
+                <strong className="muted">
+                  {result.bookingsSkipped + result.expensesSkipped}건
+                </strong>
+              </div>
+            )}
             {result.failed > 0 && (
               <div className="metric">
                 <span>실패</span>

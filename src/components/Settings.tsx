@@ -7,6 +7,8 @@ import { buildCSV } from '../utils';
 import {
   addProperty,
   clearAll,
+  deleteBooking,
+  deleteExpense,
   deleteProperty,
   syncAll,
   syncAllIcals,
@@ -451,6 +453,87 @@ export function Settings() {
     }
   };
 
+  const handleDedupe = async () => {
+    if (!confirm('동일한 날짜·금액·카테고리·메모의 비용/예약을 정리할까요?')) return;
+    setBusy(true);
+    try {
+      const [allExpenses, allBookings] = await Promise.all([
+        db.expenses.toArray(),
+        db.bookings.toArray(),
+      ]);
+
+      // 비용 그룹핑: date + amount + category + notes
+      const expGroups = new Map<string, typeof allExpenses>();
+      for (const e of allExpenses) {
+        const key = `${e.date}|${e.amount}|${e.category}|${e.notes ?? ''}`.toLowerCase();
+        const arr = expGroups.get(key) ?? [];
+        arr.push(e);
+        expGroups.set(key, arr);
+      }
+
+      // 예약 그룹핑: checkIn + revenue + guestName + platform
+      const bkGroups = new Map<string, typeof allBookings>();
+      for (const b of allBookings) {
+        if (b.status === 'blocked') continue;
+        const key = `${b.checkIn}|${b.revenue}|${b.guestName}|${b.platform}`.toLowerCase();
+        const arr = bkGroups.get(key) ?? [];
+        arr.push(b);
+        bkGroups.set(key, arr);
+      }
+
+      const expensesToDelete: string[] = [];
+      for (const grp of expGroups.values()) {
+        if (grp.length < 2) continue;
+        // 숙소 지정된 항목 우선 → 그 다음 오래된 항목 우선
+        grp.sort((a, b) => {
+          const aHas = a.propertyId !== null ? 0 : 1;
+          const bHas = b.propertyId !== null ? 0 : 1;
+          if (aHas !== bHas) return aHas - bHas;
+          return a.createdAt - b.createdAt;
+        });
+        for (let i = 1; i < grp.length; i++) expensesToDelete.push(grp[i].id);
+      }
+
+      const bookingsToDelete: string[] = [];
+      for (const grp of bkGroups.values()) {
+        if (grp.length < 2) continue;
+        grp.sort((a, b) => {
+          const aHas = a.propertyId ? 0 : 1;
+          const bHas = b.propertyId ? 0 : 1;
+          if (aHas !== bHas) return aHas - bHas;
+          return a.createdAt - b.createdAt;
+        });
+        for (let i = 1; i < grp.length; i++) bookingsToDelete.push(grp[i].id);
+      }
+
+      if (expensesToDelete.length === 0 && bookingsToDelete.length === 0) {
+        alert('중복 항목이 없어요');
+        return;
+      }
+      if (
+        !confirm(
+          `중복 비용 ${expensesToDelete.length}건, 중복 예약 ${bookingsToDelete.length}건을 삭제할까요?`,
+        )
+      ) return;
+
+      for (const id of expensesToDelete) {
+        try { await deleteExpense(id); } catch { /* noop */ }
+      }
+      for (const id of bookingsToDelete) {
+        try { await deleteBooking(id); } catch { /* noop */ }
+      }
+      alert(
+        `정리 완료: 비용 ${expensesToDelete.length}건, 예약 ${bookingsToDelete.length}건 삭제`,
+      );
+    } catch (err) {
+      alert(
+        '정리 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleClear = async () => {
     if (!confirm('정말 모든 데이터를 삭제할까요? 클라우드에서도 사라져요.'))
       return;
@@ -660,6 +743,24 @@ export function Settings() {
           <p className="muted small">
             CSV: Google Sheets, Excel, Numbers에서 바로 열림. <br />
             데이터는 클라우드(Supabase)에 자동 저장되므로 평소엔 따로 백업 불필요.
+          </p>
+        </div>
+      </section>
+
+      <section className="section">
+        <h2>중복 정리</h2>
+        <div className="card">
+          <button
+            className="btn block"
+            onClick={handleDedupe}
+            disabled={busy}
+          >
+            중복 비용/예약 정리
+          </button>
+          <p className="muted small">
+            같은 날짜 · 금액 · 카테고리 · 메모가 동일한 비용을 하나만
+            남기고 삭제합니다 (숙소가 지정된 항목 우선 유지). 예약은
+            체크인·금액·이름·플랫폼이 같으면 정리합니다.
           </p>
         </div>
       </section>

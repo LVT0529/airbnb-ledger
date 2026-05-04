@@ -1,32 +1,59 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { Booking } from '../types';
 import { COUNTRIES, PLATFORMS } from '../data';
-import { flagEmoji, formatKRW } from '../utils';
+import { flagEmoji, formatKRW, monthRange } from '../utils';
 import { deleteBooking } from '../sync';
 import { BookingForm } from './BookingForm';
 
 export function Bookings() {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
   const [filterProperty, setFilterProperty] = useState<string | 'all'>('all');
   const [editing, setEditing] = useState<Booking | null>(null);
   const [showForm, setShowForm] = useState(false);
 
+  const range = monthRange(year, month);
+
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
-  const bookings =
-    useLiveQuery(async () => {
-      let list: Booking[];
-      if (filterProperty === 'all') {
-        list = await db.bookings.orderBy('checkIn').reverse().toArray();
-      } else {
-        const filtered = await db.bookings
-          .where('propertyId')
-          .equals(filterProperty)
-          .toArray();
-        list = filtered.sort((a, b) => b.checkIn.localeCompare(a.checkIn));
-      }
-      return list.filter((b) => b.status !== 'blocked');
-    }, [filterProperty]) ?? [];
+  const monthBookings =
+    useLiveQuery(
+      () =>
+        db.bookings
+          .where('checkIn')
+          .between(range.start, range.end, true, true)
+          .toArray(),
+      [range.start, range.end],
+    ) ?? [];
+
+  const bookings = useMemo(() => {
+    let list = monthBookings.filter((b) => b.status !== 'blocked');
+    if (filterProperty !== 'all') {
+      list = list.filter((b) => b.propertyId === filterProperty);
+    }
+    return [...list].sort((a, b) => b.checkIn.localeCompare(a.checkIn));
+  }, [monthBookings, filterProperty]);
+
+  const totalRevenue = bookings
+    .filter((b) => b.status !== 'pending')
+    .reduce((s, b) => s + b.revenue, 0);
+  const totalNights = bookings.reduce((s, b) => s + b.nights, 0);
+
+  const prev = () => {
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else setMonth((m) => m - 1);
+  };
+  const next = () => {
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else setMonth((m) => m + 1);
+  };
 
   const handleAdd = () => {
     if (properties.length === 0) {
@@ -60,6 +87,18 @@ export function Bookings() {
         </button>
       </div>
 
+      <div className="month-nav">
+        <button onClick={prev} aria-label="이전 달">
+          <ChevronLeft size={16} />
+        </button>
+        <h1>
+          {year}년 {month}월
+        </h1>
+        <button onClick={next} aria-label="다음 달">
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
       {properties.length > 1 && (
         <div className="filter-bar">
           <button
@@ -81,8 +120,22 @@ export function Bookings() {
         </div>
       )}
 
+      <div className="card">
+        <div className="metric large">
+          <span>매출</span>
+          <strong style={{ color: 'var(--pos)' }}>
+            {formatKRW(totalRevenue)}
+          </strong>
+        </div>
+        <hr />
+        <div className="metric">
+          <span>예약 {bookings.length}건</span>
+          <strong>{totalNights}박</strong>
+        </div>
+      </div>
+
       {bookings.length === 0 ? (
-        <div className="empty">예약이 없어요</div>
+        <div className="empty">이번 달 예약이 없어요</div>
       ) : (
         <div className="list">
           {bookings.map((b) => {
