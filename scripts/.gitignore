@@ -1,3 +1,4 @@
-auth-state.json
+auth-state*.json
 downloads/
 debug/
+.env.local

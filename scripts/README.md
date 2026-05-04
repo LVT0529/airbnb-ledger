@@ -1,73 +1,88 @@
-# Airbnb 수익 자동 수집 스크립트
+# 멀티 플랫폼 예약 수집 스크립트
 
-Playwright 기반으로 Airbnb 호스트 페이지에 로그인하여 거래내역(CSV)을 자동으로 내려받습니다.
+Playwright 기반으로 Airbnb / Booking.com / Agoda YCS 에 로그인해 호스트 예약 정보(게스트, 박수, 매출 등)를 가져옵니다.
 
-## 첫 사용 단계
+**설계 원칙**
+- 비밀번호는 **로컬 PC 외부로 절대 나가지 않음** (수동 로그인 → 세션 쿠키만 저장)
+- 세션 파일은 플랫폼별 분리: `auth-state-airbnb.json` / `auth-state-booking.json` / `auth-state-agoda.json`
+- 모두 `.gitignore` 처리됨
+- 추출 결과는 JSON 으로 저장 → 사용자가 검토 후 가계부에 반영
+
+## 처음 한 번만
 
 ```bash
-# 1. 의존성 설치 (이미 했다면 skip)
 pnpm install
-
-# 2. Playwright용 Chromium 브라우저 설치 (최초 1회)
 npx playwright install chromium
-
-# 3. 첫 실행 — 헤드풀 브라우저가 뜨고 로그인 화면으로 이동합니다.
-#    이메일/SMS/Google 어떤 방식이든 로그인을 마친 뒤,
-#    터미널에 ENTER 를 눌러 세션을 저장하세요.
-pnpm fetch:airbnb --login
-
-# 4. 두 번째 실행부터는 헤드리스로 자동 동작 (기본: 이번 달)
-pnpm fetch:airbnb
-
-# 또는 특정 월 지정
-pnpm fetch:airbnb --month 2026-04
 ```
 
-다운로드된 CSV 는 `scripts/downloads/airbnb-YYYY-MM.csv` 에 저장됩니다.
+## 플랫폼별 로그인 (헤드풀, 한 번만)
 
-## CLI 옵션
+```bash
+node scripts/login.mjs airbnb
+node scripts/login.mjs booking
+node scripts/login.mjs agoda
+```
 
-| 옵션 | 설명 |
-| --- | --- |
-| `--month YYYY-MM` | 가져올 월 지정 (기본: 이번 달) |
-| `--headed` | 브라우저 창을 띄워 실행 (디버깅용) |
-| `--login` | `auth-state.json` 을 삭제하고 로그인 흐름 다시 진행 |
-| `-h`, `--help` | 도움말 출력 |
+각 명령은 헤드풀 브라우저를 띄우고 로그인 페이지로 이동합니다. 직접 로그인 (이메일/OTP/2FA 모두 가능)을 마친 뒤 터미널에 **ENTER** 를 누르면 세션이 `scripts/auth-state-<platform>.json` 에 저장돼요.
 
-## 동작 방식
+세션 만료 시 `--force` 로 재로그인:
 
-- 첫 실행 시 `scripts/auth-state.json` 에 쿠키/세션을 저장합니다.
-- 이후 실행은 이 파일을 사용해 즉시 로그인 상태로 진입합니다.
-- 세션 만료 시 다시 `--login` 으로 갱신하세요.
-- 모든 산출물(`auth-state.json`, `downloads/`, `debug/`)은 git ignore 됩니다.
+```bash
+node scripts/login.mjs airbnb --force
+```
 
-## 셀렉터가 깨졌을 때 디버깅
+## 예약 수집
 
-Airbnb 의 호스트 UI 는 자주 바뀝니다. 거래내역 페이지 진입 / 기간 선택 / CSV 버튼 등이
-실패하는 경우 다음 순서로 점검하세요.
+```bash
+# 모든 플랫폼 한 번에
+node scripts/sync.mjs all
 
-1. `--headed` 로 실행하여 브라우저 화면을 직접 관찰합니다.
-   ```bash
-   pnpm fetch:airbnb --headed --month 2026-04
-   ```
-2. 에러 발생 시 `scripts/debug/*.png` 에 자동으로 스크린샷이 남습니다.
-3. 변경된 셀렉터가 있다면 `scripts/airbnb-fetch.mjs` 안의 후보 배열
-   (`directCandidates`, `yearSelectorCandidates`, `monthSelectorCandidates`,
-   `clickCsvDownload` 의 `candidates`) 을 수정하면 됩니다.
-4. Airbnb 가 봇 탐지로 차단하는 경우, `--login` 으로 세션을 새로 만들고
-   동일 IP / 동일 UA 환경에서 재시도하세요.
+# 특정 플랫폼만
+node scripts/sync.mjs airbnb
+node scripts/sync.mjs booking
+node scripts/sync.mjs agoda
 
-## 가계부 앱에 업로드
+# 디버깅: 브라우저 창 보면서 실행
+node scripts/sync.mjs all --headed
+```
 
-1. 위 절차로 `scripts/downloads/airbnb-YYYY-MM.csv` 를 확보합니다.
-2. 가계부 PWA 앱을 엽니다 (`pnpm dev` 또는 배포 URL).
-3. **설정 → Airbnb 수익 가져오기** 메뉴로 이동합니다.
-4. 다운로드한 CSV 파일을 업로드하면 자동으로 거래내역이 가계부에 반영됩니다.
+결과는 `scripts/downloads/bookings-YYYY-MM-DDTHH-MM-SS.json` 으로 저장됩니다. 형식:
 
-## 보안 주의
+```json
+{
+  "fetchedAt": "2026-05-04T10:00:00.000Z",
+  "results": [
+    {
+      "platform": "airbnb",
+      "rows": [
+        { "platform": "airbnb", "guestName": "Mango Lee", "checkIn": "2026-05-10", "revenue": 320000, "rawText": "..." }
+      ]
+    },
+    { "platform": "booking", "rows": [...] },
+    { "platform": "agoda", "rows": [...] }
+  ]
+}
+```
 
-- `auth-state.json` 에는 로그인 세션 쿠키가 들어 있습니다. 절대 외부에 공유하거나
-  커밋하지 마세요. (`.gitignore` 로 기본 차단됨)
-- 공용 PC에서 실행하지 마세요.
-- 사용 후 더 이상 필요 없다면 `auth-state.json` 을 삭제하거나 `--login` 으로 재발급
-  주기를 짧게 가져가세요.
+## 셀렉터 깨졌을 때
+
+플랫폼 UI 변경으로 추출 0건이 나오면:
+
+1. `--headed` 로 실행해 화면 확인
+2. `scripts/debug/*.png` 에 실패 시점 스크린샷 자동 저장됨
+3. `scripts/platforms/<platform>.mjs` 의 `RESERVATION_URLS` 와 `rowSelectors` 배열에 셀렉터 후보 추가
+4. Booking / Agoda 는 호텔별 컨텍스트 선택이 필요할 수 있음 → 처음 진입한 URL 을 그대로 `RESERVATION_URLS` 에 넣어주면 됨
+
+## 보안
+
+- `auth-state-*.json` 은 로그인 세션 쿠키 포함 → 외부 유출 금지 (`.gitignore` 차단)
+- 공용 PC 에서 실행하지 마세요
+- 사용 빈도 낮으면 작업 후 세션 파일 삭제 권장
+
+## 레거시 스크립트
+
+기존 `airbnb-fetch.mjs` (CSV 다운로드 전용) 도 그대로 유지됩니다:
+
+```bash
+pnpm fetch:airbnb --month 2026-04
+```
