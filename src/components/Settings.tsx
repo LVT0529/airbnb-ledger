@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Property } from '../types';
@@ -16,6 +16,12 @@ import { supabase } from '../supabase';
 import { Modal } from './Modal';
 import { AirbnbImportModal } from './AirbnbImportModal';
 
+interface GmailConnection {
+  email: string | null;
+  total_processed: number;
+  last_sync_at: string | null;
+}
+
 const COLORS = ['#FF5A5F', '#00A699', '#FC642D', '#5C6BC0', '#FFB400', '#7B61FF'];
 
 type EditTarget = Property | 'new' | null;
@@ -29,6 +35,118 @@ export function Settings() {
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAirbnbImport, setShowAirbnbImport] = useState(false);
+  const [gmail, setGmail] = useState<GmailConnection | null>(null);
+  const [gmailBusy, setGmailBusy] = useState(false);
+  const [gmailMessage, setGmailMessage] = useState<string | null>(null);
+
+  const loadGmail = async () => {
+    const { data: token } = await supabase
+      .from('user_google_tokens')
+      .select('email')
+      .maybeSingle();
+    if (!token) {
+      setGmail(null);
+      return;
+    }
+    const { data: state } = await supabase
+      .from('gmail_sync_state')
+      .select('total_processed, last_sync_at')
+      .maybeSingle();
+    setGmail({
+      email: token.email ?? null,
+      total_processed: state?.total_processed ?? 0,
+      last_sync_at: state?.last_sync_at ?? null,
+    });
+  };
+
+  useEffect(() => {
+    loadGmail();
+  }, []);
+
+  // OAuth 콜백 처리: ?code=...&state=gmail-oauth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (code && state === 'gmail-oauth') {
+      (async () => {
+        setGmailBusy(true);
+        setGmailMessage('Gmail 연동 처리 중…');
+        try {
+          const { data, error } = await supabase.functions.invoke(
+            'oauth-callback',
+            {
+              body: {
+                code,
+                redirect_uri:
+                  window.location.origin + window.location.pathname,
+              },
+            },
+          );
+          if (error) throw error;
+          window.history.replaceState({}, '', window.location.pathname);
+          await loadGmail();
+          setGmailMessage(`Gmail 연동 완료: ${data?.email ?? ''}`);
+        } catch (e) {
+          setGmailMessage(
+            'Gmail 연동 실패: ' + (e instanceof Error ? e.message : ''),
+          );
+        } finally {
+          setGmailBusy(false);
+        }
+      })();
+    }
+  }, []);
+
+  const startGmailOAuth = async () => {
+    setGmailBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        url: string;
+      }>('oauth-callback', { method: 'GET' });
+      if (error) throw error;
+      if (!data?.url) throw new Error('URL 생성 실패');
+      window.location.href = data.url;
+    } catch (e) {
+      setGmailMessage(
+        'OAuth URL 생성 실패: ' + (e instanceof Error ? e.message : ''),
+      );
+      setGmailBusy(false);
+    }
+  };
+
+  const runGmailSync = async () => {
+    setGmailBusy(true);
+    setGmailMessage('Gmail 동기화 중…');
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-sync');
+      if (error) throw error;
+      setGmailMessage(
+        `완료 — 처리 ${data.newProcessed ?? 0}건 · 업데이트 ${data.updated ?? 0}건 · 신규 ${data.inserted ?? 0}건${
+          data.errors?.length ? ` · 오류 ${data.errors.length}건` : ''
+        }`,
+      );
+      await loadGmail();
+    } catch (e) {
+      setGmailMessage(
+        '동기화 실패: ' + (e instanceof Error ? e.message : ''),
+      );
+    } finally {
+      setGmailBusy(false);
+    }
+  };
+
+  const disconnectGmail = async () => {
+    if (!confirm('Gmail 연동을 해제할까요? (저장된 예약은 유지)')) return;
+    setGmailBusy(true);
+    try {
+      await supabase.from('user_google_tokens').delete().neq('user_id', '');
+      await loadGmail();
+      setGmailMessage('Gmail 연동 해제됨');
+    } finally {
+      setGmailBusy(false);
+    }
+  };
 
   const startEdit = (target: Property | 'new') => {
     setEditing(target);
@@ -341,6 +459,68 @@ export function Settings() {
           </div>
         </section>
       )}
+
+      <section className="section">
+        <h2>Gmail 자동 동기화</h2>
+        <div className="card">
+          {!gmail ? (
+            <>
+              <button
+                className="btn primary block"
+                onClick={startGmailOAuth}
+                disabled={gmailBusy}
+              >
+                {gmailBusy ? '연결 중…' : 'Gmail 연결하기'}
+              </button>
+              <p className="muted small">
+                Airbnb가 호스트에게 보내는 알림 메일에서 매출·게스트
+                이름·체크인을 자동으로 추출합니다. 본인 Gmail의{' '}
+                <strong>읽기 권한만</strong> 받고, 메일을 다른 곳에 보내지
+                않습니다.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="metric">
+                <span>연결된 계정</span>
+                <strong>{gmail.email ?? '—'}</strong>
+              </div>
+              <div className="metric">
+                <span>처리한 메일</span>
+                <strong>{gmail.total_processed}건</strong>
+              </div>
+              <div className="metric">
+                <span>마지막 동기화</span>
+                <strong>
+                  {gmail.last_sync_at
+                    ? new Date(gmail.last_sync_at).toLocaleString('ko-KR')
+                    : '—'}
+                </strong>
+              </div>
+              <button
+                className="btn primary block"
+                onClick={runGmailSync}
+                disabled={gmailBusy}
+                style={{ marginTop: 12 }}
+              >
+                {gmailBusy ? '동기화 중…' : '지금 동기화'}
+              </button>
+              <button
+                className="btn block"
+                onClick={disconnectGmail}
+                disabled={gmailBusy}
+              >
+                연동 해제
+              </button>
+            </>
+          )}
+          {gmailMessage && (
+            <p className="muted small" style={{ marginTop: 10 }}>
+              {gmailMessage}
+            </p>
+          )}
+        </div>
+      </section>
 
       {properties.length > 0 && (
         <section className="section">

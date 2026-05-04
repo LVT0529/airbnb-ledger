@@ -1,4 +1,11 @@
-export type Platform = 'airbnb' | 'booking' | 'agoda' | 'expedia' | 'direct' | 'other';
+export type Platform =
+  | 'airbnb'
+  | 'booking'
+  | 'agoda'
+  | 'expedia'
+  | 'vrbo'
+  | 'direct'
+  | 'other';
 
 export interface Property {
   id: string;

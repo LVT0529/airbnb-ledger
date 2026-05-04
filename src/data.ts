@@ -10,6 +10,7 @@ export const PLATFORMS: {
   { value: 'booking', label: 'Booking.com', short: 'Booking', emoji: '🛎️' },
   { value: 'agoda', label: 'Agoda', short: 'Agoda', emoji: '🌏' },
   { value: 'expedia', label: 'Expedia', short: 'Expedia', emoji: '✈️' },
+  { value: 'vrbo', label: 'Vrbo', short: 'Vrbo', emoji: '🏖️' },
   { value: 'direct', label: '직접 예약', short: '직접', emoji: '📞' },
   { value: 'other', label: '기타', short: '기타', emoji: '📋' },
 ];

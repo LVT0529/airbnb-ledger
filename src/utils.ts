@@ -43,6 +43,59 @@ export function todayYmd(): string {
   return ymd(new Date());
 }
 
+/**
+ * checkIn ~ checkOut(exclusive) 사이의 박 중 year/month에 속하는 박 수.
+ * 예: checkIn=2026-04-30, checkOut=2026-05-03 → year=2026, month=4 → 1 (4/30)
+ *                                              → year=2026, month=5 → 2 (5/1, 5/2)
+ */
+export function nightsInMonth(
+  checkIn: string,
+  checkOut: string,
+  year: number,
+  month: number,
+): number {
+  if (!checkIn || !checkOut) return 0;
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0); // 그 달의 마지막 날
+  const start = new Date(checkIn);
+  const end = new Date(checkOut); // exclusive
+
+  let count = 0;
+  for (
+    const d = new Date(start);
+    d < end;
+    d.setDate(d.getDate() + 1)
+  ) {
+    if (d >= monthStart && d <= monthEnd) count++;
+  }
+  return count;
+}
+
+/**
+ * 한 예약을 그 달의 일별 비율로 분배. 박/매출이 그 달 점유분만큼만 잡힘.
+ */
+export function prorateBookingForMonth<
+  B extends { checkIn: string; checkOut: string; nights: number; revenue: number },
+>(
+  booking: B,
+  year: number,
+  month: number,
+): B & { proratedNights: number; proratedRevenue: number } {
+  const inMonth = nightsInMonth(
+    booking.checkIn,
+    booking.checkOut,
+    year,
+    month,
+  );
+  const totalNights = Math.max(1, booking.nights);
+  const ratio = inMonth / totalNights;
+  return {
+    ...booking,
+    proratedNights: inMonth,
+    proratedRevenue: Math.round(booking.revenue * ratio),
+  };
+}
+
 function csvCell(value: unknown): string {
   const s = value === null || value === undefined ? '' : String(value);
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {

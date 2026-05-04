@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
-import { flagEmoji, formatKRW, monthRange } from '../utils';
+import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
 import { DonutChart } from './DonutChart';
 
 const CATEGORY_PALETTE = [
@@ -42,16 +42,20 @@ export function Dashboard() {
   );
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
+
+  // 월 경계 비례 분배: 그 달에 단 1박이라도 걸친 예약 모두 가져온다 (체크인이 전달이어도 포함)
   const bookingsRaw =
-    useLiveQuery(
-      () =>
-        db.bookings
-          .where('checkIn')
-          .between(range.start, range.end, true, true)
-          .toArray(),
-      [range.start, range.end],
-    ) ?? [];
-  const bookings = bookingsRaw.filter((b) => b.status !== 'blocked');
+    useLiveQuery(async () => {
+      const all = await db.bookings.toArray();
+      return all.filter(
+        (b) => b.checkIn <= range.end && b.checkOut > range.start,
+      );
+    }, [range.start, range.end]) ?? [];
+
+  const bookings = bookingsRaw
+    .filter((b) => b.status !== 'blocked')
+    .map((b) => prorateBookingForMonth(b, year, month))
+    .filter((b) => b.proratedNights > 0);
   const expenses =
     useLiveQuery(
       () =>
@@ -63,15 +67,22 @@ export function Dashboard() {
     ) ?? [];
 
   const prevBookingsRaw =
-    useLiveQuery(
-      () =>
-        db.bookings
-          .where('checkIn')
-          .between(prevRange.start, prevRange.end, true, true)
-          .toArray(),
-      [prevRange.start, prevRange.end],
-    ) ?? [];
-  const prevBookings = prevBookingsRaw.filter((b) => b.status !== 'blocked');
+    useLiveQuery(async () => {
+      const all = await db.bookings.toArray();
+      return all.filter(
+        (b) => b.checkIn <= prevRange.end && b.checkOut > prevRange.start,
+      );
+    }, [prevRange.start, prevRange.end]) ?? [];
+  const prevBookings = prevBookingsRaw
+    .filter((b) => b.status !== 'blocked')
+    .map((b) =>
+      prorateBookingForMonth(
+        b,
+        month === 1 ? year - 1 : year,
+        month === 1 ? 12 : month - 1,
+      ),
+    )
+    .filter((b) => b.proratedNights > 0);
   const prevExpenses =
     useLiveQuery(
       () =>
@@ -82,10 +93,10 @@ export function Dashboard() {
       [prevRange.start, prevRange.end],
     ) ?? [];
 
-  const totalRevenue = bookings.reduce((s, b) => s + b.revenue, 0);
+  const totalRevenue = bookings.reduce((s, b) => s + b.proratedRevenue, 0);
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const profit = totalRevenue - totalExpense;
-  const totalNights = bookings.reduce((s, b) => s + b.nights, 0);
+  const totalNights = bookings.reduce((s, b) => s + b.proratedNights, 0);
   const occupancy =
     properties.length > 0
       ? (totalNights / (properties.length * range.days)) * 100
@@ -100,7 +111,7 @@ export function Dashboard() {
       : 0;
 
   const prevProfit =
-    prevBookings.reduce((s, b) => s + b.revenue, 0) -
+    prevBookings.reduce((s, b) => s + b.proratedRevenue, 0) -
     prevExpenses.reduce((s, e) => s + e.amount, 0);
 
   const deltaPct =
@@ -111,9 +122,9 @@ export function Dashboard() {
   const byProperty = properties.map((p) => {
     const b = bookings.filter((x) => x.propertyId === p.id);
     const e = expenses.filter((x) => x.propertyId === p.id);
-    const rev = b.reduce((s, x) => s + x.revenue, 0);
+    const rev = b.reduce((s, x) => s + x.proratedRevenue, 0);
     const exp = e.reduce((s, x) => s + x.amount, 0);
-    const nights = b.reduce((s, x) => s + x.nights, 0);
+    const nights = b.reduce((s, x) => s + x.proratedNights, 0);
     return {
       property: p,
       revenue: rev,
@@ -153,7 +164,7 @@ export function Dashboard() {
   const byPlatform = useMemo(() => {
     const map: Record<string, number> = {};
     bookings.forEach((b) => {
-      map[b.platform] = (map[b.platform] || 0) + b.revenue;
+      map[b.platform] = (map[b.platform] || 0) + b.proratedRevenue;
     });
     return PLATFORMS.map((p) => ({ ...p, revenue: map[p.value] || 0 }))
       .filter((x) => x.revenue > 0)
