@@ -4,7 +4,33 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { Booking } from '../types';
 import { COUNTRIES, PLATFORMS } from '../data';
-import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
+import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth, todayYmd } from '../utils';
+
+function relativeStatus(checkIn: string, checkOut: string, today: string) {
+  // checkOut은 exclusive (체크아웃 당일은 stay X)
+  if (today < checkIn) {
+    const days = daysBetween(today, checkIn);
+    if (days === 0) return { label: '오늘 체크인', tone: 'accent' as const };
+    if (days === 1) return { label: '내일 체크인', tone: 'accent' as const };
+    if (days <= 7) return { label: `${days}일 후 체크인`, tone: 'soft' as const };
+    return null;
+  }
+  if (today >= checkOut) {
+    const days = daysBetween(checkOut, today);
+    if (days === 0) return { label: '오늘 체크아웃', tone: 'accent' as const };
+    if (days === 1) return { label: '어제 체크아웃', tone: 'soft' as const };
+    return null;
+  }
+  // 투숙 중
+  const dayN = daysBetween(checkIn, today) + 1;
+  return { label: `투숙 중 D+${dayN}`, tone: 'pos' as const };
+}
+
+function daysBetween(a: string, b: string): number {
+  const da = new Date(a + 'T00:00:00');
+  const db = new Date(b + 'T00:00:00');
+  return Math.round((db.getTime() - da.getTime()) / 86400000);
+}
 import { deleteBooking } from '../sync';
 import { BookingForm } from './BookingForm';
 
@@ -152,6 +178,24 @@ export function Bookings() {
             </span>
           </strong>
         </div>
+        <div
+          className="bar"
+          style={{ marginTop: 6, height: 5 }}
+          aria-label={`점유율 ${occupancyPct}%`}
+        >
+          <div
+            className="bar-fill"
+            style={{
+              width: `${Math.min(100, occupancyPct)}%`,
+              background:
+                occupancyPct >= 70
+                  ? 'var(--pos)'
+                  : occupancyPct >= 40
+                    ? 'var(--accent)'
+                    : 'var(--ink-soft)',
+            }}
+          />
+        </div>
       </div>
 
       {bookings.length === 0 ? (
@@ -163,6 +207,13 @@ export function Bookings() {
             const country = COUNTRIES.find((c) => c.code === b.country);
             const platform = PLATFORMS.find((p) => p.value === b.platform);
             const isPending = b.status === 'pending';
+            const rel = relativeStatus(b.checkIn, b.checkOut, todayYmd());
+            const relColor =
+              rel?.tone === 'pos'
+                ? 'var(--pos)'
+                : rel?.tone === 'accent'
+                  ? 'var(--accent)'
+                  : 'var(--ink-muted)';
             return (
               <div
                 key={b.id}
@@ -186,6 +237,30 @@ export function Bookings() {
                         {flagEmoji(b.country)} {b.guestName}
                         <span className="muted"> · {country?.name ?? b.country}</span>
                       </>
+                    )}
+                    {rel && (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: relColor,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          background:
+                            rel.tone === 'soft'
+                              ? 'transparent'
+                              : 'color-mix(in srgb, currentColor 12%, transparent)',
+                          border:
+                            rel.tone === 'soft'
+                              ? `1px solid var(--ink-soft)`
+                              : 'none',
+                          verticalAlign: 'middle',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {rel.label}
+                      </span>
                     )}
                   </div>
                   <div className="item-meta">

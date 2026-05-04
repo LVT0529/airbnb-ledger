@@ -124,6 +124,19 @@ export function RecurringExpenses({ properties }: Props) {
     return result;
   }, [allExpenses, recurring]);
 
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(
+    new Set(),
+  );
+
+  const toggleSuggestion = (i: number) => {
+    setSelectedSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
   const handleAddSuggestion = async (s: typeof detectedSuggestions[number]) => {
     setBusy(true);
     try {
@@ -142,6 +155,40 @@ export function RecurringExpenses({ properties }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleAddSelected = async () => {
+    if (selectedSuggestions.size === 0) return;
+    setBusy(true);
+    let added = 0;
+    let failed = 0;
+    const now = new Date();
+    const startMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    for (const i of selectedSuggestions) {
+      const s = detectedSuggestions[i];
+      if (!s) continue;
+      try {
+        await addRecurringExpense({
+          propertyId: s.propertyId,
+          category: s.category,
+          amount: s.amount,
+          dayOfMonth: s.dayOfMonth,
+          notes: s.sample || undefined,
+          active: true,
+          startMonth,
+        });
+        added++;
+      } catch {
+        failed++;
+      }
+    }
+    setSelectedSuggestions(new Set());
+    setMessage(
+      failed > 0
+        ? `${added}건 추가, ${failed}건 실패`
+        : `${added}건 추가됨`,
+    );
+    setBusy(false);
   };
 
   const handleApplyNow = async () => {
@@ -290,24 +337,63 @@ export function RecurringExpenses({ properties }: Props) {
       {detectedSuggestions.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div
-            className="muted small"
-            style={{ marginBottom: 8, fontWeight: 600 }}
+            style={{
+              marginBottom: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
           >
-            추천: 매월 반복되는 것 같아요
+            <span className="muted small" style={{ fontWeight: 600 }}>
+              추천: 매월 반복되는 것 같아요
+            </span>
+            <button
+              className="btn"
+              style={{ padding: '4px 8px', fontSize: 11 }}
+              onClick={() => {
+                const limit = Math.min(6, detectedSuggestions.length);
+                if (selectedSuggestions.size === limit) {
+                  setSelectedSuggestions(new Set());
+                } else {
+                  setSelectedSuggestions(
+                    new Set(Array.from({ length: limit }, (_, i) => i)),
+                  );
+                }
+              }}
+            >
+              {selectedSuggestions.size === Math.min(6, detectedSuggestions.length)
+                ? '선택 해제'
+                : '전체 선택'}
+            </button>
           </div>
           <div style={{ display: 'grid', gap: 8 }}>
             {detectedSuggestions.slice(0, 6).map((s, i) => {
               const prop = properties.find((p) => p.id === s.propertyId);
+              const checked = selectedSuggestions.has(i);
               return (
-                <div
+                <label
                   key={i}
                   className="recurring-row"
                   style={{
                     padding: '10px 12px',
-                    background: 'var(--bg-soft)',
+                    background: checked
+                      ? 'color-mix(in srgb, var(--accent) 8%, var(--bg-soft))'
+                      : 'var(--bg-soft)',
                     borderRadius: 10,
+                    cursor: 'pointer',
+                    border: checked
+                      ? '1px solid var(--accent)'
+                      : '1px solid transparent',
+                    transition: 'all 0.15s',
                   }}
                 >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleSuggestion(i)}
+                    style={{ marginRight: 10, accentColor: 'var(--accent)' }}
+                  />
                   <div className="recurring-main">
                     <div className="recurring-title">{s.category}</div>
                     <div className="recurring-meta">
@@ -330,18 +416,31 @@ export function RecurringExpenses({ properties }: Props) {
                       {formatKRW(s.amount)}
                     </span>
                     <button
-                      className="btn primary"
-                      onClick={() => handleAddSuggestion(s)}
+                      className="btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleAddSuggestion(s);
+                      }}
                       disabled={busy}
                       style={{ padding: '4px 10px', fontSize: 11 }}
                     >
-                      추가
+                      낱개
                     </button>
                   </div>
-                </div>
+                </label>
               );
             })}
           </div>
+          {selectedSuggestions.size > 0 && (
+            <button
+              className="btn primary block"
+              onClick={handleAddSelected}
+              disabled={busy}
+              style={{ marginTop: 10 }}
+            >
+              선택한 {selectedSuggestions.size}건 한 번에 추가
+            </button>
+          )}
           {detectedSuggestions.length > 6 && (
             <div className="muted small" style={{ marginTop: 6 }}>
               외 {detectedSuggestions.length - 6}개 더 있어요

@@ -279,10 +279,28 @@ export function Dashboard() {
             </span>
           </div>
           <div
+            className="bar"
+            style={{ marginTop: 6, height: 5 }}
+            aria-label={`점유율 ${occupancyPct}%`}
+          >
+            <div
+              className="bar-fill"
+              style={{
+                width: `${Math.min(100, occupancyPct)}%`,
+                background:
+                  occupancyPct >= 70
+                    ? 'var(--pos)'
+                    : occupancyPct >= 40
+                      ? 'var(--accent)'
+                      : 'var(--ink-soft)',
+              }}
+            />
+          </div>
+          <div
             style={{
               fontSize: 13,
               color: occupancyPct >= 50 ? 'var(--pos)' : 'var(--ink-muted)',
-              marginTop: 2,
+              marginTop: 4,
               fontWeight: 600,
             }}
           >
