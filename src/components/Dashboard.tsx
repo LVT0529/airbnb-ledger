@@ -5,6 +5,7 @@ import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
 import { DonutChart } from './DonutChart';
+import { Modal } from './Modal';
 
 const CATEGORY_PALETTE = [
   '#C45A3A', // terracotta
@@ -24,10 +25,17 @@ function formatKRWBare(amount: number): string {
 }
 
 
+type Drilldown =
+  | { type: 'bookings'; title: string }
+  | { type: 'expense-cat'; category: string }
+  | { type: 'property-revenue'; propertyId: string; propertyName: string }
+  | null;
+
 export function Dashboard() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
+  const [drilldown, setDrilldown] = useState<Drilldown>(null);
 
   const range = monthRange(year, month);
   const prevRange = monthRange(
@@ -244,6 +252,15 @@ export function Dashboard() {
               segments={revenueSegments}
               defaultLabel="숙소 수"
               defaultValue={String(revenueSegments.length)}
+              onSegmentClick={(label) => {
+                const p = properties.find((x) => x.name === label);
+                if (p)
+                  setDrilldown({
+                    type: 'property-revenue',
+                    propertyId: p.id,
+                    propertyName: p.name,
+                  });
+              }}
             />
           )}
 
@@ -255,14 +272,41 @@ export function Dashboard() {
               defaultLabel="항목"
               defaultValue={String(expenseSegments.length)}
               negative
+              onSegmentClick={(label) =>
+                setDrilldown({ type: 'expense-cat', category: label })
+              }
             />
           )}
         </div>
       )}
 
       <div className="dash-stats">
-        <div className="dash-stat">
-          <span className="eyebrow">예약</span>
+        <div
+          className="dash-stat"
+          role="button"
+          tabIndex={0}
+          onClick={() =>
+            bookings.length > 0 &&
+            setDrilldown({
+              type: 'bookings',
+              title: `${month}월 예약 ${bookings.length}건`,
+            })
+          }
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && bookings.length > 0) {
+              setDrilldown({
+                type: 'bookings',
+                title: `${month}월 예약 ${bookings.length}건`,
+              });
+            }
+          }}
+          style={{
+            cursor: bookings.length > 0 ? 'pointer' : 'default',
+          }}
+        >
+          <span className="eyebrow">
+            예약 {bookings.length > 0 && '›'}
+          </span>
           <div className="dash-stat-value">
             {bookings.length}
             <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
@@ -417,7 +461,138 @@ export function Dashboard() {
           </div>
         </>
       )}
+
+      {drilldown && (
+        <DrilldownModal
+          drilldown={drilldown}
+          bookings={bookings}
+          expenses={expenses}
+          properties={properties}
+          onClose={() => setDrilldown(null)}
+        />
+      )}
     </div>
+  );
+}
+
+type ProratedBooking = import('../types').Booking & {
+  proratedNights: number;
+  proratedRevenue: number;
+};
+
+interface DrilldownModalProps {
+  drilldown: NonNullable<Drilldown>;
+  bookings: ProratedBooking[];
+  expenses: import('../types').Expense[];
+  properties: import('../types').Property[];
+  onClose: () => void;
+}
+
+function DrilldownModal({
+  drilldown,
+  bookings,
+  expenses,
+  properties,
+  onClose,
+}: DrilldownModalProps) {
+  if (drilldown.type === 'bookings' || drilldown.type === 'property-revenue') {
+    const list =
+      drilldown.type === 'bookings'
+        ? bookings
+        : bookings.filter((b) => b.propertyId === drilldown.propertyId);
+    const sorted = [...list].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+    const total = sorted.reduce((s, b) => s + b.proratedRevenue, 0);
+    const title =
+      drilldown.type === 'bookings'
+        ? drilldown.title
+        : `${drilldown.propertyName} · 매출 ${sorted.length}건`;
+    return (
+      <Modal title={title} onClose={onClose}>
+        <div className="card" style={{ margin: '0 0 12px', padding: 12 }}>
+          <div className="metric">
+            <span>합계</span>
+            <strong style={{ color: 'var(--pos)' }}>
+              ₩ {formatKRWBare(total)}
+            </strong>
+          </div>
+        </div>
+        <div className="list" style={{ gap: 8 }}>
+          {sorted.map((b) => {
+            const prop = properties.find((p) => p.id === b.propertyId);
+            return (
+              <div
+                key={b.id}
+                className="list-item"
+                style={
+                  prop
+                    ? { borderLeft: `3px solid ${prop.color}` }
+                    : undefined
+                }
+              >
+                <div className="item-main">
+                  <div className="item-title">
+                    {flagEmoji(b.country)} {b.guestName}
+                    <span className="muted small" style={{ marginLeft: 6 }}>
+                      {b.platform}
+                    </span>
+                  </div>
+                  <div className="item-meta">
+                    {prop && <>{prop.name} · </>}
+                    {b.checkIn} ~ {b.checkOut} · {b.proratedNights}박
+                  </div>
+                </div>
+                <div className="item-amount">
+                  <span>₩ {formatKRWBare(b.proratedRevenue)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  // expense category
+  const list = expenses.filter((e) => e.category === drilldown.category);
+  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
+  const total = sorted.reduce((s, e) => s + e.amount, 0);
+  return (
+    <Modal title={`${drilldown.category} · ${sorted.length}건`} onClose={onClose}>
+      <div className="card" style={{ margin: '0 0 12px', padding: 12 }}>
+        <div className="metric">
+          <span>합계</span>
+          <strong className="neg">− ₩ {formatKRWBare(total)}</strong>
+        </div>
+      </div>
+      <div className="list" style={{ gap: 8 }}>
+        {sorted.map((ex) => {
+          const prop = properties.find((p) => p.id === ex.propertyId);
+          return (
+            <div
+              key={ex.id}
+              className="list-item"
+              style={
+                prop
+                  ? { borderLeft: `3px solid ${prop.color}` }
+                  : { borderLeft: `3px solid var(--ink-soft)` }
+              }
+            >
+              <div className="item-main">
+                <div className="item-title">
+                  {ex.notes || ex.category}
+                </div>
+                <div className="item-meta">
+                  {prop ? prop.name : '공통'} · {ex.date}
+                </div>
+              </div>
+              <div className="item-amount">
+                <span>₩ {formatKRWBare(ex.amount)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
   );
 }
 
@@ -431,6 +606,7 @@ interface DonutSectionProps {
   defaultLabel: string;
   defaultValue: string;
   negative?: boolean;
+  onSegmentClick?: (label: string) => void;
 }
 
 function DonutSection({
@@ -440,6 +616,7 @@ function DonutSection({
   defaultLabel,
   defaultValue,
   negative,
+  onSegmentClick,
 }: DonutSectionProps) {
   const [hover, setHover] = useState<number | null>(null);
   const active = hover !== null ? segments[hover] : null;
@@ -482,7 +659,11 @@ function DonutSection({
               }`}
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
-              onClick={() => setHover(hover === i ? null : i)}
+              onClick={() => {
+                if (onSegmentClick) onSegmentClick(s.label);
+                else setHover(hover === i ? null : i);
+              }}
+              style={onSegmentClick ? { cursor: 'pointer' } : undefined}
             >
               <span
                 className="legend-dot"
@@ -493,6 +674,17 @@ function DonutSection({
               <span className="legend-amount tabular">
                 ₩ {formatKRWBare(s.value)}
               </span>
+              {onSegmentClick && (
+                <span
+                  style={{
+                    color: 'var(--ink-muted)',
+                    fontSize: 12,
+                    marginLeft: 6,
+                  }}
+                >
+                  ›
+                </span>
+              )}
             </li>
           );
         })}
