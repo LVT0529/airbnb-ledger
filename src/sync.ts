@@ -387,8 +387,25 @@ async function syncIcalForUrl(
   }
 
   const allEvents = parseICS(ics);
-  const reservationEvents = allEvents.filter((ev) => ev.isReservation);
-  const blockedEvents = allEvents.filter((ev) => !ev.isReservation);
+
+  // 플랫폼별 후처리
+  // - Booking: 모든 이벤트 = 예약 (호스트 보호 정책상 'CLOSED - Not available'로만 표시됨)
+  // - 미스터멘션: 'Reserved/Booked' 키워드 있는 것만 예약, 외는 무시 (시스템 더미 메일 제외)
+  // - 그 외: parser 분류 그대로
+  let reservationEvents: typeof allEvents;
+  let blockedEvents: typeof allEvents;
+  if (platform === 'booking') {
+    reservationEvents = allEvents;
+    blockedEvents = [];
+  } else if (platform === 'mrmention') {
+    reservationEvents = allEvents.filter((ev) =>
+      /reserved|booked|booking/i.test(ev.summary),
+    );
+    blockedEvents = [];
+  } else {
+    reservationEvents = allEvents.filter((ev) => ev.isReservation);
+    blockedEvents = allEvents.filter((ev) => !ev.isReservation);
+  }
 
   const userId = await getUserId();
 
