@@ -11,6 +11,7 @@ import {
   saveDebugScreenshot,
   SCRIPTS_DIR,
 } from './lib/browser.mjs';
+import { pushBookings } from './lib/supabase.mjs';
 import * as airbnb from './platforms/airbnb.mjs';
 import * as booking from './platforms/booking.mjs';
 import * as agoda from './platforms/agoda.mjs';
@@ -19,13 +20,16 @@ const PLATFORMS = { airbnb, booking, agoda };
 const DOWNLOADS_DIR = join(SCRIPTS_DIR, 'downloads');
 
 function printHelp() {
-  console.log(`Usage: node scripts/sync.mjs [<platform>|all] [--headed]
+  console.log(`Usage: node scripts/sync.mjs [<platform>|all] [--headed] [--push]
 
 Platforms:
   airbnb | booking | agoda | all
 
 Options:
   --headed  헤드풀 모드 (디버깅용)
+  --push    추출 후 Supabase 의 기존 bookings 와 confirmation_code 로 매칭하여
+            guest_name / country / revenue / nights / guests 자동 업데이트
+            (.env.local 에 SUPABASE_SERVICE_ROLE_KEY 필요)
 
 선결 조건: 각 플랫폼에 대해 먼저 'node scripts/login.mjs <platform>' 실행 필요.
 `);
@@ -96,9 +100,30 @@ async function main() {
   const outPath = join(DOWNLOADS_DIR, `bookings-${ts}.json`);
   writeFileSync(outPath, JSON.stringify(out, null, 2), 'utf8');
   console.log(`\n저장 완료: ${outPath}`);
-  console.log(
-    '결과를 검토한 뒤 앱의 JSON import 또는 직접 매칭 처리에 사용하세요.',
-  );
+
+  // --push: Supabase 매칭 업데이트
+  if (argv.includes('--push')) {
+    console.log('\n[push] Supabase 매칭 업데이트 시작…');
+    for (const r of out.results) {
+      if (!r.rows?.length) continue;
+      try {
+        const stats = await pushBookings(r.rows);
+        console.log(
+          `[push:${r.platform}] 매칭 ${stats.matched}건 · 업데이트 ${stats.updated}건 · 누락 ${stats.missed}건`,
+        );
+        if (stats.errors.length > 0) {
+          console.warn(`[push:${r.platform}] 오류 ${stats.errors.length}건`);
+          stats.errors.slice(0, 5).forEach((e) => console.warn('  ', e));
+        }
+      } catch (e) {
+        console.error(`[push:${r.platform}] 실패: ${e?.message ?? e}`);
+      }
+    }
+  } else {
+    console.log(
+      '결과를 검토한 뒤 --push 옵션으로 다시 실행하면 Supabase 와 자동 매칭됩니다.',
+    );
+  }
 }
 
 main().catch((e) => {

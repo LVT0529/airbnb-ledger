@@ -46,6 +46,32 @@ node scripts/sync.mjs agoda
 node scripts/sync.mjs all --headed
 ```
 
+### Supabase 자동 매칭 + 업데이트 (--push)
+
+iCal 동기화로 만들어진 "매출 미입력" pending 예약을 자동으로 채우려면 `--push`:
+
+```bash
+node scripts/sync.mjs airbnb --push
+node scripts/sync.mjs all --push
+```
+
+매칭 키: `confirmation_code` (Airbnb HM... 코드).
+업데이트 필드: `guest_name`, `country`, `guests`, `nights`, `revenue`,
+그리고 매출이 0보다 크면 status `pending → confirmed` 전이.
+
+**선결**: `scripts/.env.local` (또는 프로젝트 루트 `.env.local`) 에 Supabase
+service role key 추가:
+
+```bash
+# .env.local (gitignore 처리됨)
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
+```
+
+키 발급: Supabase 대시보드 → Project Settings → API → `service_role` 키 복사.
+주의: service_role 은 RLS 우회. 절대 외부에 공유 금지.
+
+---
+
 결과는 `scripts/downloads/bookings-YYYY-MM-DDTHH-MM-SS.json` 으로 저장됩니다. 형식:
 
 ```json

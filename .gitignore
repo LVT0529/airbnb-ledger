@@ -9,3 +9,7 @@ dev-dist
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# Local environment
+.env.local
+
