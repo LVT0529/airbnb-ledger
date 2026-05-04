@@ -223,17 +223,9 @@ export function ExcelImportModal({ properties, onClose }: Props) {
                 {preview.expenseCount}건 · −{formatKRW(preview.expenseTotal)}
               </strong>
             </div>
-            {preview.transferCount > 0 && (
-              <div className="metric">
-                <span>이체 (계좌간 이동)</span>
-                <strong className="muted">
-                  {preview.transferCount}건 · {formatKRW(preview.transferTotal)}
-                </strong>
-              </div>
-            )}
             {preview.invalidCount > 0 && (
               <div className="metric">
-                <span>건너뜀 (날짜·금액 누락)</span>
+                <span>건너뜀</span>
                 <strong className="muted">{preview.invalidCount}건</strong>
               </div>
             )}
@@ -241,8 +233,9 @@ export function ExcelImportModal({ properties, onClose }: Props) {
             <div className="metric small muted">
               <span>합계 검증</span>
               <span>
-                {preview.bookingCount + preview.expenseCount +
-                  preview.transferCount + preview.invalidCount}
+                {preview.bookingCount +
+                  preview.expenseCount +
+                  preview.invalidCount}
                 건 / {preview.totalRows}건
               </span>
             </div>
@@ -298,6 +291,48 @@ export function ExcelImportModal({ properties, onClose }: Props) {
               {preview.unmappedCategories.length > 6 &&
                 ` 외 ${preview.unmappedCategories.length - 6}개`}
             </p>
+          )}
+
+          {preview.invalidSamples.length > 0 && (
+            <details className="card" style={{ margin: 0, padding: 12 }}>
+              <summary className="small" style={{ cursor: 'pointer' }}>
+                건너뛴 {preview.invalidCount}건 자세히 보기
+              </summary>
+              <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                {preview.invalidSamples.map((s, i) => (
+                  <div
+                    key={i}
+                    className="small"
+                    style={{
+                      borderLeft: '2px solid var(--ink-soft)',
+                      paddingLeft: 8,
+                    }}
+                  >
+                    <div>
+                      <strong>{s.reason}</strong>{' '}
+                      <span className="muted">
+                        [type: "{s.rawType || '(빈값)'}"]
+                      </span>
+                    </div>
+                    <div className="muted">
+                      {s.date || '(날짜없음)'} · {s.category || '-'}
+                      {s.subcategory && ` / ${s.subcategory}`} ·{' '}
+                      {formatKRW(s.amount)}
+                    </div>
+                    {s.description && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {s.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {preview.invalidCount > preview.invalidSamples.length && (
+                  <div className="muted small">
+                    외 {preview.invalidCount - preview.invalidSamples.length}건…
+                  </div>
+                )}
+              </div>
+            </details>
           )}
 
           <label>

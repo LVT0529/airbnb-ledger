@@ -25,9 +25,19 @@ export interface ExcelBookingRow {
   rawMemo: string;
 }
 
+export interface ExcelInvalidSample {
+  rawType: string;
+  category: string;
+  subcategory: string;
+  description: string;
+  amount: number;
+  date: string;
+  reason: string;
+}
+
 export interface ExcelImportPreview {
   totalRows: number;
-  // 비용
+  // 비용 (지출 + 이체 통합)
   expenseCount: number;
   expenseTotal: number;
   expenses: ExcelExpenseRow[];
@@ -37,12 +47,10 @@ export interface ExcelImportPreview {
   bookingTotal: number;
   bookings: ExcelBookingRow[];
   bookingsByPlatform: Record<string, number>;
-  // 이체 (계좌간 이동, 손익 무관)
-  transferCount: number;
-  transferTotal: number;
-  // 데이터 불완전 (날짜/금액 없음)
+  // 데이터 불완전 (날짜/금액/타입 등 문제)
   invalidCount: number;
   invalidTotal: number;
+  invalidSamples: ExcelInvalidSample[];
   errors: string[];
 }
 
@@ -254,23 +262,37 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
   let expenseTotal = 0;
   let bookingCount = 0;
   let bookingTotal = 0;
-  let transferCount = 0;
-  let transferTotal = 0;
   let invalidCount = 0;
   let invalidTotal = 0;
+  const invalidSamples: ExcelInvalidSample[] = [];
   const bookingsByPlatform: Record<string, number> = {};
+
+  const pushInvalid = (
+    row: Record<string, unknown>,
+    rawType: string,
+    amount: number,
+    date: string,
+    reason: string,
+  ) => {
+    invalidCount++;
+    invalidTotal += amount;
+    if (invalidSamples.length < 20) {
+      invalidSamples.push({
+        rawType,
+        category: String(row['분류'] ?? '').trim(),
+        subcategory: String(row['소분류'] ?? '').trim(),
+        description: String(row['내용'] ?? '').trim(),
+        amount,
+        date,
+        reason,
+      });
+    }
+  };
 
   for (const row of rows) {
     const type = String(row['수입/지출'] ?? row['type'] ?? '').trim();
     const amount = asNumber(row['금액'] ?? row['KRW'] ?? row['amount']);
     const date = parseDateValue(row['날짜'] ?? row['date']);
-
-    // 이체는 손익 무관 → 별도 집계 후 skip
-    if (type === '이체' || type === 'transfer') {
-      transferCount++;
-      transferTotal += Math.abs(amount);
-      continue;
-    }
 
     if (type === '수입' || type === 'income') {
       // 수입 처리
@@ -280,8 +302,13 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
       const isBusinessIncome = cls.includes('사업수입') && platformMaybe;
 
       if (!date || amount <= 0) {
-        invalidCount++;
-        invalidTotal += amount;
+        pushInvalid(
+          row,
+          type,
+          amount,
+          date,
+          !date ? '날짜 없음' : '금액 0 이하',
+        );
         continue;
       }
 
@@ -337,14 +364,26 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
       continue;
     }
 
-    if (type !== '지출' && type !== 'expense' && type !== '') {
-      invalidCount++;
-      invalidTotal += amount;
+    // 지출 / 이체 / 빈값 → 모두 비용으로 처리 (이체는 사용자 요청에 따라 비용 처리)
+    const isExpenseLike =
+      type === '지출' ||
+      type === 'expense' ||
+      type === '이체' ||
+      type === 'transfer' ||
+      type === '';
+
+    if (!isExpenseLike) {
+      pushInvalid(row, type, amount, date, `알 수 없는 타입: "${type}"`);
       continue;
     }
     if (amount <= 0 || !date) {
-      invalidCount++;
-      invalidTotal += amount;
+      pushInvalid(
+        row,
+        type,
+        amount,
+        date,
+        !date ? '날짜 없음' : '금액 0 이하',
+      );
       continue;
     }
 
@@ -388,10 +427,9 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
     bookingTotal,
     bookings,
     bookingsByPlatform,
-    transferCount,
-    transferTotal,
     invalidCount,
     invalidTotal,
+    invalidSamples,
     errors,
   };
 }
@@ -407,10 +445,9 @@ function emptyPreview(errors: string[]): ExcelImportPreview {
     bookingTotal: 0,
     bookings: [],
     bookingsByPlatform: {},
-    transferCount: 0,
-    transferTotal: 0,
     invalidCount: 0,
     invalidTotal: 0,
+    invalidSamples: [],
     errors,
   };
 }
