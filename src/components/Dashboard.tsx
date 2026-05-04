@@ -280,76 +280,151 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="dash-stats">
+      {properties.length >= 2 ? (
         <div
-          className="dash-stat"
-          role="button"
-          tabIndex={0}
-          onClick={() =>
-            bookings.length > 0 &&
-            setDrilldown({
-              type: 'bookings',
-              title: `${month}월 예약 ${bookings.length}건`,
-            })
-          }
-          onKeyDown={(e) => {
-            if ((e.key === 'Enter' || e.key === ' ') && bookings.length > 0) {
+          className="dash-stats"
+          style={{
+            gridTemplateColumns: `repeat(${properties.length}, 1fr)`,
+          }}
+        >
+          {byProperty.map((p) => {
+            const pct = Math.round((p.nights / range.days) * 100);
+            return (
+              <div
+                key={p.property.id}
+                className="dash-stat"
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  p.count > 0 &&
+                  setDrilldown({
+                    type: 'property-revenue',
+                    propertyId: p.property.id,
+                    propertyName: p.property.name,
+                  })
+                }
+                style={{
+                  cursor: p.count > 0 ? 'pointer' : 'default',
+                  borderTop: `3px solid ${p.property.color}`,
+                }}
+              >
+                <span
+                  className="eyebrow"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  {p.property.name}
+                </span>
+                <div className="dash-stat-value">
+                  {p.count}
+                  <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                    {' '}건 ·{' '}
+                  </span>
+                  {p.nights}
+                  <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                    {' '}박
+                  </span>
+                </div>
+                <div
+                  className="bar"
+                  style={{ marginTop: 6, height: 5 }}
+                  aria-label={`${p.property.name} 점유율 ${pct}%`}
+                >
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(100, pct)}%`,
+                      background: p.property.color,
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color:
+                      pct >= 70
+                        ? 'var(--pos)'
+                        : pct >= 40
+                          ? 'var(--accent)'
+                          : 'var(--ink-muted)',
+                    marginTop: 4,
+                    fontWeight: 600,
+                  }}
+                >
+                  {pct}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="dash-stats">
+          <div
+            className="dash-stat"
+            role="button"
+            tabIndex={0}
+            onClick={() =>
+              bookings.length > 0 &&
               setDrilldown({
                 type: 'bookings',
                 title: `${month}월 예약 ${bookings.length}건`,
-              });
+              })
             }
-          }}
-          style={{
-            cursor: bookings.length > 0 ? 'pointer' : 'default',
-          }}
-        >
-          <span className="eyebrow">예약</span>
-          <div className="dash-stat-value">
-            {bookings.length}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}건
-            </span>
-          </div>
-        </div>
-        <div className="dash-stat">
-          <span className="eyebrow">투숙 · 점유율</span>
-          <div className="dash-stat-value">
-            {totalNights}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}박
-            </span>
-          </div>
-          <div
-            className="bar"
-            style={{ marginTop: 6, height: 5 }}
-            aria-label={`점유율 ${occupancyPct}%`}
-          >
-            <div
-              className="bar-fill"
-              style={{
-                width: `${Math.min(100, occupancyPct)}%`,
-                background:
-                  occupancyPct >= 70
-                    ? 'var(--pos)'
-                    : occupancyPct >= 40
-                      ? 'var(--accent)'
-                      : 'var(--ink-soft)',
-              }}
-            />
-          </div>
-          <div
             style={{
-              fontSize: 13,
-              color: occupancyPct >= 50 ? 'var(--pos)' : 'var(--ink-muted)',
-              marginTop: 4,
-              fontWeight: 600,
+              cursor: bookings.length > 0 ? 'pointer' : 'default',
             }}
           >
-            {occupancyPct}%
+            <span className="eyebrow">예약</span>
+            <div className="dash-stat-value">
+              {bookings.length}
+              <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+                {' '}건
+              </span>
+            </div>
+          </div>
+          <div className="dash-stat">
+            <span className="eyebrow">투숙 · 점유율</span>
+            <div className="dash-stat-value">
+              {totalNights}
+              <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
+                {' '}박
+              </span>
+            </div>
+            <div
+              className="bar"
+              style={{ marginTop: 6, height: 5 }}
+              aria-label={`점유율 ${occupancyPct}%`}
+            >
+              <div
+                className="bar-fill"
+                style={{
+                  width: `${Math.min(100, occupancyPct)}%`,
+                  background:
+                    occupancyPct >= 70
+                      ? 'var(--pos)'
+                      : occupancyPct >= 40
+                        ? 'var(--accent)'
+                        : 'var(--ink-soft)',
+                }}
+              />
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color:
+                  occupancyPct >= 50 ? 'var(--pos)' : 'var(--ink-muted)',
+                marginTop: 4,
+                fontWeight: 600,
+              }}
+            >
+              {occupancyPct}%
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {properties.length > 0 && (
         <>
