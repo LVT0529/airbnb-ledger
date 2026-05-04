@@ -1,17 +1,17 @@
 import {
-  LayoutDashboard,
+  Home,
   CalendarDays,
-  ListChecks,
-  Wallet,
+  BedDouble,
+  Receipt,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { Tab } from '../App';
 
-const TABS: { value: Tab; label: string; Icon: typeof LayoutDashboard }[] = [
-  { value: 'dashboard', label: '대시보드', Icon: LayoutDashboard },
+const TABS: { value: Tab; label: string; Icon: typeof Home }[] = [
+  { value: 'dashboard', label: '홈', Icon: Home },
   { value: 'calendar', label: '캘린더', Icon: CalendarDays },
-  { value: 'bookings', label: '예약', Icon: ListChecks },
-  { value: 'expenses', label: '비용', Icon: Wallet },
+  { value: 'bookings', label: '예약', Icon: BedDouble },
+  { value: 'expenses', label: '비용', Icon: Receipt },
   { value: 'settings', label: '설정', Icon: SettingsIcon },
 ];
 

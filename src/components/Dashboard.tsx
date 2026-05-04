@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  BedDouble,
+} from 'lucide-react';
 import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
 import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
@@ -229,14 +235,26 @@ export function Dashboard() {
 
       <div className="dash-split">
         <div className="dash-split-cell">
-          <span className="eyebrow">매출</span>
+          <span
+            className="eyebrow"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <TrendingUp size={11} strokeWidth={2.4} />
+            매출
+          </span>
           <span className="dash-split-amount">
             ₩ {formatKRWBare(totalRevenue)}
           </span>
         </div>
         <div className="dash-split-divider" />
         <div className="dash-split-cell right">
-          <span className="eyebrow">비용</span>
+          <span
+            className="eyebrow"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <TrendingDown size={11} strokeWidth={2.4} />
+            비용
+          </span>
           <span className="dash-split-amount" style={{ color: 'var(--neg)' }}>
             − ₩ {formatKRWBare(totalExpense)}
           </span>
@@ -313,9 +331,10 @@ export function Dashboard() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                   }}
                 >
+                  <BedDouble size={11} strokeWidth={2.2} />
                   {p.property.name}
                 </span>
                 <div className="dash-stat-value">
