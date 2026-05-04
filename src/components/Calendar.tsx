@@ -138,9 +138,17 @@ export function Calendar() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
+  const [filterProperty, setFilterProperty] = useState<string | 'all'>('all');
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
-  const bookings = useLiveQuery(() => db.bookings.toArray()) ?? [];
+  const bookingsAll = useLiveQuery(() => db.bookings.toArray()) ?? [];
+  const bookings = useMemo(
+    () =>
+      filterProperty === 'all'
+        ? bookingsAll
+        : bookingsAll.filter((b) => b.propertyId === filterProperty),
+    [bookingsAll, filterProperty],
+  );
 
   const [icalSyncing, setIcalSyncing] = useState(false);
   const [icalToast, setIcalToast] = useState<string | null>(null);
@@ -250,6 +258,27 @@ export function Calendar() {
           ›
         </button>
       </div>
+
+      {properties.length > 1 && (
+        <div className="filter-bar">
+          <button
+            className={filterProperty === 'all' ? 'active' : ''}
+            onClick={() => setFilterProperty('all')}
+          >
+            전체
+          </button>
+          {properties.map((p) => (
+            <button
+              key={p.id}
+              className={filterProperty === p.id ? 'active' : ''}
+              onClick={() => setFilterProperty(p.id)}
+            >
+              <span className="dot" style={{ background: p.color }} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {propertiesWithIcal.length > 0 && (
         <div className="cal-sync-row">

@@ -5,7 +5,6 @@ import {
   ChevronRight,
   TrendingUp,
   TrendingDown,
-  BedDouble,
 } from 'lucide-react';
 import { db } from '../db';
 import { COUNTRIES, PLATFORMS } from '../data';
@@ -126,6 +125,31 @@ export function Dashboard() {
     const rev = b.reduce((s, x) => s + x.proratedRevenue, 0);
     const exp = e.reduce((s, x) => s + x.amount, 0);
     const nights = b.reduce((s, x) => s + x.proratedNights, 0);
+
+    // 플랫폼별 매출
+    const platMap: Record<string, number> = {};
+    b.forEach((bk) => {
+      platMap[bk.platform] = (platMap[bk.platform] || 0) + bk.proratedRevenue;
+    });
+    const platforms = PLATFORMS.map((pl) => ({
+      ...pl,
+      revenue: platMap[pl.value] || 0,
+    }))
+      .filter((x) => x.revenue > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // 국가별 게스트
+    const ctMap: Record<string, number> = {};
+    b.forEach((bk) => {
+      ctMap[bk.country] = (ctMap[bk.country] || 0) + 1;
+    });
+    const countries = Object.entries(ctMap)
+      .map(([code, count]) => {
+        const c = COUNTRIES.find((x) => x.code === code);
+        return { code, name: c?.name ?? code, count };
+      })
+      .sort((a, b) => b.count - a.count);
+
     return {
       property: p,
       revenue: rev,
@@ -133,6 +157,8 @@ export function Dashboard() {
       profit: rev - exp,
       nights,
       count: b.length,
+      platforms,
+      countries,
     };
   });
 
@@ -162,28 +188,6 @@ export function Dashboard() {
       .sort((a, b) => b.value - a.value);
   }, [expenses]);
 
-  const byPlatform = useMemo(() => {
-    const map: Record<string, number> = {};
-    bookings.forEach((b) => {
-      map[b.platform] = (map[b.platform] || 0) + b.proratedRevenue;
-    });
-    return PLATFORMS.map((p) => ({ ...p, revenue: map[p.value] || 0 }))
-      .filter((x) => x.revenue > 0)
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [bookings]);
-
-  const byCountry = useMemo(() => {
-    const map: Record<string, number> = {};
-    bookings.forEach((b) => {
-      map[b.country] = (map[b.country] || 0) + 1;
-    });
-    return Object.entries(map)
-      .map(([code, count]) => {
-        const c = COUNTRIES.find((x) => x.code === code);
-        return { code, name: c?.name ?? code, count };
-      })
-      .sort((a, b) => b.count - a.count);
-  }, [bookings]);
 
   const prev = () => {
     if (month === 1) {
@@ -298,88 +302,7 @@ export function Dashboard() {
         </div>
       )}
 
-      {properties.length >= 2 ? (
-        <div
-          className="dash-stats"
-          style={{
-            gridTemplateColumns: `repeat(${properties.length}, 1fr)`,
-          }}
-        >
-          {byProperty.map((p) => {
-            const pct = Math.round((p.nights / range.days) * 100);
-            return (
-              <div
-                key={p.property.id}
-                className="dash-stat"
-                role="button"
-                tabIndex={0}
-                onClick={() =>
-                  p.count > 0 &&
-                  setDrilldown({
-                    type: 'property-revenue',
-                    propertyId: p.property.id,
-                    propertyName: p.property.name,
-                  })
-                }
-                style={{
-                  cursor: p.count > 0 ? 'pointer' : 'default',
-                  borderTop: `3px solid ${p.property.color}`,
-                }}
-              >
-                <span
-                  className="eyebrow"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
-                  <BedDouble size={11} strokeWidth={2.2} />
-                  {p.property.name}
-                </span>
-                <div className="dash-stat-value">
-                  {p.count}
-                  <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-                    {' '}건 ·{' '}
-                  </span>
-                  {p.nights}
-                  <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-                    {' '}박
-                  </span>
-                </div>
-                <div
-                  className="bar"
-                  style={{ marginTop: 6, height: 5 }}
-                  aria-label={`${p.property.name} 점유율 ${pct}%`}
-                >
-                  <div
-                    className="bar-fill"
-                    style={{
-                      width: `${Math.min(100, pct)}%`,
-                      background: p.property.color,
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color:
-                      pct >= 70
-                        ? 'var(--pos)'
-                        : pct >= 40
-                          ? 'var(--accent)'
-                          : 'var(--ink-muted)',
-                    marginTop: 4,
-                    fontWeight: 600,
-                  }}
-                >
-                  {pct}%
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
+      {properties.length < 2 && (
         <div className="dash-stats">
           <div
             className="dash-stat"
@@ -504,6 +427,59 @@ export function Dashboard() {
                   {p.profit < 0 && '−'}₩ {formatKRWBare(p.profit)}
                 </span>
               </div>
+
+              {p.platforms.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div
+                    className="eyebrow"
+                    style={{ marginBottom: 6 }}
+                  >
+                    플랫폼별 매출
+                  </div>
+                  {p.platforms.map((pl) => {
+                    const pct =
+                      p.revenue > 0 ? (pl.revenue / p.revenue) * 100 : 0;
+                    return (
+                      <div key={pl.value} className="bar-row">
+                        <span>
+                          {pl.emoji} {pl.label}
+                        </span>
+                        <div className="bar">
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${pct}%`,
+                              background: p.property.color,
+                            }}
+                          />
+                        </div>
+                        <span className="bar-value">
+                          ₩ {formatKRWBare(pl.revenue)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {p.countries.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div
+                    className="eyebrow"
+                    style={{ marginBottom: 6 }}
+                  >
+                    국가별 게스트
+                  </div>
+                  <div className="country-grid">
+                    {p.countries.map((c) => (
+                      <div key={c.code} className="country-pill">
+                        {flagEmoji(c.code)} {c.name}{' '}
+                        <strong>{c.count}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </>
@@ -515,59 +491,6 @@ export function Dashboard() {
           <br />
           이번 달 이야기를 시작해 보세요.
         </div>
-      )}
-
-      {byPlatform.length > 0 && (
-        <>
-          <div className="dash-section-title">
-            <h2>플랫폼별 매출</h2>
-            <span className="eyebrow">By channel</span>
-          </div>
-          <div className="card">
-            {byPlatform.map((p) => {
-              const pct =
-                totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
-              return (
-                <div key={p.value} className="bar-row">
-                  <span>
-                    {p.emoji} {p.label}
-                  </span>
-                  <div className="bar">
-                    <div
-                      className="bar-fill"
-                      style={{
-                        width: `${pct}%`,
-                        background:
-                          p.value === 'airbnb' ? 'var(--accent)' : 'var(--olive)',
-                      }}
-                    />
-                  </div>
-                  <span className="bar-value">
-                    ₩ {formatKRWBare(p.revenue)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {byCountry.length > 0 && (
-        <>
-          <div className="dash-section-title">
-            <h2>국가별 게스트</h2>
-            <span className="eyebrow">By origin</span>
-          </div>
-          <div className="card">
-            <div className="country-grid">
-              {byCountry.map((c) => (
-                <div key={c.code} className="country-pill">
-                  {flagEmoji(c.code)} {c.name} <strong>{c.count}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
       )}
 
       {drilldown && (
