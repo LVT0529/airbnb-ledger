@@ -2,7 +2,8 @@ import { ChangeEvent, useMemo, useState } from 'react';
 import { Property } from '../types';
 import { formatKRW } from '../utils';
 import { parseExcelFile, ExcelImportPreview } from '../lib/excelImport';
-import { addExpense } from '../sync';
+import { addBooking, addExpense } from '../sync';
+import { PLATFORMS } from '../data';
 import { Modal } from './Modal';
 
 interface Props {
@@ -12,15 +13,21 @@ interface Props {
 
 export function ExcelImportModal({ properties, onClose }: Props) {
   const [preview, setPreview] = useState<ExcelImportPreview | null>(null);
-  const [propertyId, setPropertyId] = useState<string | null>(null);
+  const [propertyId, setPropertyId] = useState<string>(
+    properties[0]?.id ?? '',
+  );
+  const [importExpenses, setImportExpenses] = useState(true);
+  const [importBookings, setImportBookings] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<{
-    inserted: number;
+    expensesInserted: number;
+    bookingsInserted: number;
     failed: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const categoryStats = useMemo(() => {
+  const expenseCategoryStats = useMemo(() => {
     if (!preview) return [];
     const map = new Map<string, { count: number; sum: number }>();
     preview.expenses.forEach((e) => {
@@ -52,25 +59,65 @@ export function ExcelImportModal({ properties, onClose }: Props) {
 
   const handleImport = async () => {
     if (!preview) return;
+    if (!propertyId) {
+      setError('숙소를 선택해주세요');
+      return;
+    }
     setBusy(true);
     setError(null);
-    let inserted = 0;
+    let expensesInserted = 0;
+    let bookingsInserted = 0;
     let failed = 0;
-    for (const ex of preview.expenses) {
-      try {
-        await addExpense({
-          propertyId,
-          category: ex.category,
-          amount: ex.amount,
-          date: ex.date,
-          notes: [ex.description, ex.notes].filter(Boolean).join(' · '),
-        });
-        inserted++;
-      } catch {
-        failed++;
+
+    const total =
+      (importExpenses ? preview.expenses.length : 0) +
+      (importBookings ? preview.bookings.length : 0);
+    setProgress({ done: 0, total });
+
+    if (importExpenses) {
+      for (const ex of preview.expenses) {
+        try {
+          await addExpense({
+            propertyId,
+            category: ex.category,
+            amount: ex.amount,
+            date: ex.date,
+            notes: [ex.description, ex.notes].filter(Boolean).join(' · '),
+          });
+          expensesInserted++;
+        } catch {
+          failed++;
+        }
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
       }
     }
-    setResult({ inserted, failed });
+
+    if (importBookings) {
+      for (const b of preview.bookings) {
+        try {
+          await addBooking({
+            propertyId,
+            guestName: b.guestName,
+            country: b.country,
+            platform: b.platform,
+            guests: b.guests,
+            nights: b.nights,
+            checkIn: b.checkIn,
+            checkOut: b.checkOut,
+            revenue: b.revenue,
+            notes: b.rawMemo || undefined,
+            confirmationCode: undefined,
+            status: 'confirmed',
+          });
+          bookingsInserted++;
+        } catch {
+          failed++;
+        }
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      }
+    }
+
+    setResult({ expensesInserted, bookingsInserted, failed });
     setBusy(false);
   };
 
@@ -79,8 +126,8 @@ export function ExcelImportModal({ properties, onClose }: Props) {
       {!preview && !result && (
         <div className="form">
           <p className="muted small" style={{ margin: '0 0 12px' }}>
-            "편한가계부" 등 엑셀 파일을 업로드하면 비용 항목을 자동으로
-            카테고리 매핑하여 미리보기를 보여드려요. 수입은 무시됩니다 (iCal/CSV로 처리).
+            "편한가계부" 등 엑셀 파일을 업로드하면 비용·수입(예약)을 자동으로
+            분류해 미리보기를 보여드려요.
           </p>
           <label className="btn primary block file-label">
             엑셀 파일 선택 (.xlsx)
@@ -99,44 +146,82 @@ export function ExcelImportModal({ properties, onClose }: Props) {
 
       {preview && !result && (
         <div className="form">
+          {/* 통계 카드 */}
           <div className="card" style={{ margin: 0, padding: 14 }}>
             <div className="metric">
               <span>전체 행</span>
               <strong>{preview.totalRows}건</strong>
             </div>
+            <hr />
             <div className="metric">
-              <span>수입 (스킵)</span>
-              <strong>{preview.incomeCount}건</strong>
-            </div>
-            <div className="metric">
-              <span>지출 (가져올)</span>
+              <span>예약 (수입)</span>
               <strong style={{ color: 'var(--pos)' }}>
-                {preview.expenseCount}건
+                {preview.bookingCount}건 · {formatKRW(preview.bookingTotal)}
               </strong>
             </div>
-            <div className="metric large">
-              <span>지출 합계</span>
-              <strong>{formatKRW(preview.expenseTotal)}</strong>
+            <div className="metric">
+              <span>비용 (지출)</span>
+              <strong className="neg">
+                {preview.expenseCount}건 · −{formatKRW(preview.expenseTotal)}
+              </strong>
             </div>
-          </div>
-
-          <div className="muted small" style={{ margin: 0 }}>
-            카테고리 자동 매핑 결과:
-          </div>
-          <div className="card" style={{ margin: 0, padding: 12 }}>
-            {categoryStats.map(({ cat, count, sum }) => (
-              <div key={cat} className="metric">
-                <span>{cat}</span>
-                <strong>
-                  {count}건 · {formatKRW(sum)}
+            {preview.ignoredIncomeCount > 0 && (
+              <div className="metric">
+                <span>무시됨 (부수입/사은품 등)</span>
+                <strong className="muted">
+                  {preview.ignoredIncomeCount}건 ·{' '}
+                  {formatKRW(preview.ignoredIncomeTotal)}
                 </strong>
               </div>
-            ))}
+            )}
           </div>
+
+          {/* 플랫폼별 매출 */}
+          {Object.keys(preview.bookingsByPlatform).length > 0 && (
+            <>
+              <div className="muted small" style={{ margin: 0 }}>
+                플랫폼별 매출:
+              </div>
+              <div className="card" style={{ margin: 0, padding: 12 }}>
+                {Object.entries(preview.bookingsByPlatform)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([plat, sum]) => {
+                    const p = PLATFORMS.find((x) => x.value === plat);
+                    return (
+                      <div key={plat} className="metric">
+                        <span>
+                          {p?.emoji} {p?.label ?? plat}
+                        </span>
+                        <strong>{formatKRW(sum)}</strong>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          {/* 비용 카테고리별 */}
+          {expenseCategoryStats.length > 0 && (
+            <>
+              <div className="muted small" style={{ margin: 0 }}>
+                비용 카테고리:
+              </div>
+              <div className="card" style={{ margin: 0, padding: 12 }}>
+                {expenseCategoryStats.map(({ cat, count, sum }) => (
+                  <div key={cat} className="metric">
+                    <span>{cat}</span>
+                    <strong>
+                      {count}건 · {formatKRW(sum)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {preview.unmappedCategories.length > 0 && (
             <p className="muted small" style={{ margin: 0 }}>
-              "기타"로 분류된 원본 카테고리:{' '}
+              "기타"로 분류된 원본:{' '}
               {preview.unmappedCategories.slice(0, 6).join(', ')}
               {preview.unmappedCategories.length > 6 &&
                 ` 외 ${preview.unmappedCategories.length - 6}개`}
@@ -144,20 +229,35 @@ export function ExcelImportModal({ properties, onClose }: Props) {
           )}
 
           <label>
-            숙소 (모든 비용에 적용)
+            숙소 (모든 항목에 적용)
             <select
-              value={propertyId ?? ''}
-              onChange={(e) =>
-                setPropertyId(e.target.value === '' ? null : e.target.value)
-              }
+              value={propertyId}
+              onChange={(e) => setPropertyId(e.target.value)}
             >
-              <option value="">공통 (모든 숙소)</option>
+              <option value="">선택…</option>
               {properties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={importBookings}
+              onChange={(e) => setImportBookings(e.target.checked)}
+            />
+            <span>예약 {preview.bookingCount}건 가져오기</span>
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={importExpenses}
+              onChange={(e) => setImportExpenses(e.target.checked)}
+            />
+            <span>비용 {preview.expenseCount}건 가져오기</span>
           </label>
 
           {error && <div className="error">{error}</div>}
@@ -175,11 +275,15 @@ export function ExcelImportModal({ properties, onClose }: Props) {
               type="button"
               className="btn primary"
               onClick={handleImport}
-              disabled={busy}
+              disabled={
+                busy ||
+                !propertyId ||
+                (!importExpenses && !importBookings)
+              }
             >
               {busy
-                ? `가져오는 중… (${preview.expenseCount}건)`
-                : `${preview.expenseCount}건 가져오기`}
+                ? `가져오는 중… (${progress.done}/${progress.total})`
+                : '가져오기'}
             </button>
           </div>
         </div>
@@ -189,17 +293,21 @@ export function ExcelImportModal({ properties, onClose }: Props) {
         <div className="form">
           <div className="card" style={{ margin: 0, padding: 14 }}>
             <div className="metric">
-              <span>저장된 비용</span>
+              <span>예약 추가</span>
               <strong style={{ color: 'var(--pos)' }}>
-                {result.inserted}건
+                {result.bookingsInserted}건
+              </strong>
+            </div>
+            <div className="metric">
+              <span>비용 추가</span>
+              <strong style={{ color: 'var(--pos)' }}>
+                {result.expensesInserted}건
               </strong>
             </div>
             {result.failed > 0 && (
               <div className="metric">
                 <span>실패</span>
-                <strong style={{ color: 'var(--neg)' }}>
-                  {result.failed}건
-                </strong>
+                <strong className="neg">{result.failed}건</strong>
               </div>
             )}
           </div>
