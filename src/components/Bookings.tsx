@@ -80,6 +80,19 @@ export function Bookings() {
   const occupancyPct =
     capacityNights > 0 ? Math.round((totalNights / capacityNights) * 100) : 0;
 
+  const perPropertyStats = useMemo(() => {
+    if (filterProperty !== 'all' || properties.length < 2) return [];
+    return properties.map((p) => {
+      const list = proratedBookings.filter((b) => b.propertyId === p.id);
+      const nights = list.reduce((s, b) => s + b.proratedNights, 0);
+      const revenue = list
+        .filter((b) => b.status !== 'pending')
+        .reduce((s, b) => s + b.proratedRevenue, 0);
+      const pct = range.days > 0 ? Math.round((nights / range.days) * 100) : 0;
+      return { property: p, nights, revenue, pct, count: list.length };
+    });
+  }, [filterProperty, properties, proratedBookings, range.days]);
+
   const prev = () => {
     if (month === 1) {
       setYear((y) => y - 1);
@@ -196,6 +209,74 @@ export function Bookings() {
             }}
           />
         </div>
+
+        {perPropertyStats.length > 0 && (
+          <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+            {perPropertyStats.map(({ property, nights, revenue, pct, count }) => (
+              <div key={property.id}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: 13,
+                    marginBottom: 3,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      className="dot"
+                      style={{ background: property.color }}
+                    />
+                    {property.name}
+                    <span className="muted small" style={{ marginLeft: 4 }}>
+                      {count}건 · {nights}박
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span className="muted small">
+                      {formatKRW(revenue)}
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: 12,
+                        color:
+                          pct >= 70
+                            ? 'var(--pos)'
+                            : pct >= 40
+                              ? 'var(--accent)'
+                              : 'var(--ink-muted)',
+                      }}
+                    >
+                      {pct}%
+                    </strong>
+                  </span>
+                </div>
+                <div className="bar" style={{ height: 4 }}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.min(100, pct)}%`,
+                      background: property.color,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {bookings.length === 0 ? (

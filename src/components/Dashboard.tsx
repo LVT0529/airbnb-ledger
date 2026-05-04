@@ -383,6 +383,22 @@ export function Dashboard() {
                   </span>
                 </span>
               </div>
+              <div
+                className="bar"
+                style={{ height: 4, marginTop: -4, marginBottom: 8 }}
+                aria-label={`점유율 ${Math.round((p.nights / range.days) * 100)}%`}
+              >
+                <div
+                  className="bar-fill"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((p.nights / range.days) * 100),
+                    )}%`,
+                    background: p.property.color,
+                  }}
+                />
+              </div>
               <div className="dash-property-row profit">
                 <span className="label">순이익</span>
                 <span
