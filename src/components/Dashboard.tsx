@@ -304,9 +304,7 @@ export function Dashboard() {
             cursor: bookings.length > 0 ? 'pointer' : 'default',
           }}
         >
-          <span className="eyebrow">
-            예약 {bookings.length > 0 && '›'}
-          </span>
+          <span className="eyebrow">예약</span>
           <div className="dash-stat-value">
             {bookings.length}
             <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
@@ -674,17 +672,6 @@ function DonutSection({
               <span className="legend-amount tabular">
                 ₩ {formatKRWBare(s.value)}
               </span>
-              {onSegmentClick && (
-                <span
-                  style={{
-                    color: 'var(--ink-muted)',
-                    fontSize: 12,
-                    marginLeft: 6,
-                  }}
-                >
-                  ›
-                </span>
-              )}
             </li>
           );
         })}
