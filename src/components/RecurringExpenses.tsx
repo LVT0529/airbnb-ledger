@@ -57,6 +57,93 @@ export function RecurringExpenses({ properties }: Props) {
     return Array.from(set);
   }, [allExpenses, recurring]);
 
+  // 매월 반복되는 비용 자동 감지: 같은 (숙소, 카테고리, 금액)이 3개 이상의 다른
+  // 월에 등장했고, 아직 정기 결제로 등록되지 않았으면 추천
+  const detectedSuggestions = useMemo(() => {
+    type Sig = { propertyId: string | null; category: string; amount: number };
+    const groups = new Map<
+      string,
+      Sig & { months: Set<string>; days: number[]; sample: string }
+    >();
+    const sigKey = (s: Sig) =>
+      `${s.propertyId ?? '_'}|${s.category}|${s.amount}`;
+
+    for (const e of allExpenses) {
+      if (e.sourceRecurringId) continue; // 이미 정기 결제로 추가된 건 제외
+      if (!e.amount || e.amount <= 0) continue;
+      const month = e.date.slice(0, 7); // YYYY-MM
+      const day = Number(e.date.slice(8, 10)) || 1;
+      const sig: Sig = {
+        propertyId: e.propertyId,
+        category: e.category,
+        amount: e.amount,
+      };
+      const key = sigKey(sig);
+      const cur = groups.get(key) ?? {
+        ...sig,
+        months: new Set<string>(),
+        days: [],
+        sample: e.notes ?? '',
+      };
+      cur.months.add(month);
+      cur.days.push(day);
+      groups.set(key, cur);
+    }
+
+    const existingKeys = new Set(
+      recurring.map((r) =>
+        sigKey({
+          propertyId: r.propertyId,
+          category: r.category,
+          amount: r.amount,
+        }),
+      ),
+    );
+
+    const result = Array.from(groups.values())
+      .filter((g) => g.months.size >= 3)
+      .filter((g) => !existingKeys.has(sigKey(g)))
+      .map((g) => {
+        // 가장 많이 등장한 일자
+        const dayCount = new Map<number, number>();
+        g.days.forEach((d) => dayCount.set(d, (dayCount.get(d) ?? 0) + 1));
+        const mostCommonDay = Array.from(dayCount.entries()).sort(
+          (a, b) => b[1] - a[1],
+        )[0][0];
+        return {
+          propertyId: g.propertyId,
+          category: g.category,
+          amount: g.amount,
+          dayOfMonth: mostCommonDay,
+          monthCount: g.months.size,
+          sample: g.sample,
+        };
+      })
+      .sort((a, b) => b.monthCount - a.monthCount || b.amount - a.amount);
+
+    return result;
+  }, [allExpenses, recurring]);
+
+  const handleAddSuggestion = async (s: typeof detectedSuggestions[number]) => {
+    setBusy(true);
+    try {
+      const now = new Date();
+      await addRecurringExpense({
+        propertyId: s.propertyId,
+        category: s.category,
+        amount: s.amount,
+        dayOfMonth: s.dayOfMonth,
+        notes: s.sample || undefined,
+        active: true,
+        startMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+      });
+    } catch (e) {
+      alert('추가 실패: ' + (e instanceof Error ? e.message : ''));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleApplyNow = async () => {
     setApplying(true);
     setMessage(null);
@@ -198,6 +285,69 @@ export function RecurringExpenses({ properties }: Props) {
         <p className="muted small" style={{ marginTop: 10 }}>
           {message}
         </p>
+      )}
+
+      {detectedSuggestions.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div
+            className="muted small"
+            style={{ marginBottom: 8, fontWeight: 600 }}
+          >
+            추천: 매월 반복되는 것 같아요
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {detectedSuggestions.slice(0, 6).map((s, i) => {
+              const prop = properties.find((p) => p.id === s.propertyId);
+              return (
+                <div
+                  key={i}
+                  className="recurring-row"
+                  style={{
+                    padding: '10px 12px',
+                    background: 'var(--bg-soft)',
+                    borderRadius: 10,
+                  }}
+                >
+                  <div className="recurring-main">
+                    <div className="recurring-title">{s.category}</div>
+                    <div className="recurring-meta">
+                      {prop ? (
+                        <>
+                          <span
+                            className="dot"
+                            style={{ background: prop.color }}
+                          />
+                          {prop.name}
+                        </>
+                      ) : (
+                        '공통'
+                      )}{' '}
+                      · 매월 {s.dayOfMonth}일 · {s.monthCount}개월 반복
+                    </div>
+                  </div>
+                  <div className="recurring-actions">
+                    <span className="recurring-amount">
+                      {formatKRW(s.amount)}
+                    </span>
+                    <button
+                      className="btn primary"
+                      onClick={() => handleAddSuggestion(s)}
+                      disabled={busy}
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                    >
+                      추가
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {detectedSuggestions.length > 6 && (
+            <div className="muted small" style={{ marginTop: 6 }}>
+              외 {detectedSuggestions.length - 6}개 더 있어요
+            </div>
+          )}
+        </div>
       )}
 
       {editing && (

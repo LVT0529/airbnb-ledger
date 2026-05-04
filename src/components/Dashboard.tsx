@@ -91,6 +91,11 @@ export function Dashboard() {
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const profit = totalRevenue - totalExpense;
   const totalNights = bookings.reduce((s, b) => s + b.proratedNights, 0);
+  const capacityNights = range.days * Math.max(1, properties.length);
+  const occupancyPct =
+    capacityNights > 0
+      ? Math.round((totalNights / capacityNights) * 100)
+      : 0;
 
   const prevProfit =
     prevBookings.reduce((s, b) => s + b.proratedRevenue, 0) -
@@ -266,12 +271,22 @@ export function Dashboard() {
           </div>
         </div>
         <div className="dash-stat">
-          <span className="eyebrow">투숙</span>
+          <span className="eyebrow">투숙 · 점유율</span>
           <div className="dash-stat-value">
             {totalNights}
             <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}박
+              {' '}/ {capacityNights}박
             </span>
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: occupancyPct >= 50 ? 'var(--pos)' : 'var(--ink-muted)',
+              marginTop: 2,
+              fontWeight: 600,
+            }}
+          >
+            {occupancyPct}%
           </div>
         </div>
       </div>
@@ -303,6 +318,9 @@ export function Dashboard() {
                 <span className="label">예약 · 투숙</span>
                 <span className="value">
                   {p.count}건 · {p.nights}박
+                  <span className="muted" style={{ marginLeft: 6 }}>
+                    ({Math.round((p.nights / range.days) * 100)}%)
+                  </span>
                 </span>
               </div>
               <div className="dash-property-row profit">

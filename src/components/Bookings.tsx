@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../db';
 import { Booking } from '../types';
 import { COUNTRIES, PLATFORMS } from '../data';
-import { flagEmoji, formatKRW, monthRange } from '../utils';
+import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
 import { deleteBooking } from '../sync';
 import { BookingForm } from './BookingForm';
 
@@ -19,15 +19,14 @@ export function Bookings() {
   const range = monthRange(year, month);
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
+  // 월 경계 비례: 그 달에 1박이라도 걸친 예약 모두 포함
   const monthBookings =
-    useLiveQuery(
-      () =>
-        db.bookings
-          .where('checkIn')
-          .between(range.start, range.end, true, true)
-          .toArray(),
-      [range.start, range.end],
-    ) ?? [];
+    useLiveQuery(async () => {
+      const all = await db.bookings.toArray();
+      return all.filter(
+        (b) => b.checkIn <= range.end && b.checkOut > range.start,
+      );
+    }, [range.start, range.end]) ?? [];
 
   const bookings = useMemo(() => {
     let list = monthBookings.filter((b) => b.status !== 'blocked');
@@ -37,10 +36,23 @@ export function Bookings() {
     return [...list].sort((a, b) => b.checkIn.localeCompare(a.checkIn));
   }, [monthBookings, filterProperty]);
 
-  const totalRevenue = bookings
+  const proratedBookings = useMemo(
+    () => bookings.map((b) => prorateBookingForMonth(b, year, month)),
+    [bookings, year, month],
+  );
+
+  const totalRevenue = proratedBookings
     .filter((b) => b.status !== 'pending')
-    .reduce((s, b) => s + b.revenue, 0);
-  const totalNights = bookings.reduce((s, b) => s + b.nights, 0);
+    .reduce((s, b) => s + b.proratedRevenue, 0);
+  const totalNights = proratedBookings.reduce(
+    (s, b) => s + b.proratedNights,
+    0,
+  );
+  const capacityNights =
+    range.days *
+    (filterProperty === 'all' ? Math.max(1, properties.length) : 1);
+  const occupancyPct =
+    capacityNights > 0 ? Math.round((totalNights / capacityNights) * 100) : 0;
 
   const prev = () => {
     if (month === 1) {
@@ -130,7 +142,15 @@ export function Bookings() {
         <hr />
         <div className="metric">
           <span>예약 {bookings.length}건</span>
-          <strong>{totalNights}박</strong>
+          <strong>
+            {totalNights} / {capacityNights}박
+            <span
+              className="muted"
+              style={{ marginLeft: 6, fontSize: 13, fontWeight: 600 }}
+            >
+              ({occupancyPct}%)
+            </span>
+          </strong>
         </div>
       </div>
 
