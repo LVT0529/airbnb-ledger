@@ -301,14 +301,12 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
       const platformMaybe = parsePlatform(sub);
       const isBusinessIncome = cls.includes('사업수입') && platformMaybe;
 
-      if (!date || amount <= 0) {
-        pushInvalid(
-          row,
-          type,
-          amount,
-          date,
-          !date ? '날짜 없음' : '금액 0 이하',
-        );
+      if (!date) {
+        pushInvalid(row, type, amount, date, '날짜 없음');
+        continue;
+      }
+      if (amount < 0) {
+        pushInvalid(row, type, amount, date, '음수 금액');
         continue;
       }
 
@@ -376,14 +374,12 @@ export async function parseExcelFile(file: File): Promise<ExcelImportPreview> {
       pushInvalid(row, type, amount, date, `알 수 없는 타입: "${type}"`);
       continue;
     }
-    if (amount <= 0 || !date) {
-      pushInvalid(
-        row,
-        type,
-        amount,
-        date,
-        !date ? '날짜 없음' : '금액 0 이하',
-      );
+    if (!date) {
+      pushInvalid(row, type, amount, date, '날짜 없음');
+      continue;
+    }
+    if (amount < 0) {
+      pushInvalid(row, type, amount, date, '음수 금액');
       continue;
     }
 
