@@ -317,7 +317,7 @@ export function Dashboard() {
           <div className="dash-stat-value">
             {totalNights}
             <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}/ {capacityNights}박
+              {' '}박
             </span>
           </div>
           <div

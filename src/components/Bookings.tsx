@@ -169,7 +169,7 @@ export function Bookings() {
         <div className="metric">
           <span>예약 {bookings.length}건</span>
           <strong>
-            {totalNights} / {capacityNights}박
+            {totalNights}박
             <span
               className="muted"
               style={{ marginLeft: 6, fontSize: 13, fontWeight: 600 }}
