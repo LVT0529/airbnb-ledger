@@ -1300,3 +1300,37 @@ input, button, select, textarea {
   border: 3px solid var(--ink);
   transform: scale(1.05);
 }
+
+/* Recurring expenses */
+.recurring-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.recurring-row:last-of-type { border-bottom: none; }
+.recurring-main { flex: 1; min-width: 0; }
+.recurring-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.recurring-meta {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+}
+.recurring-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.recurring-amount {
+  font-family: var(--num);
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}

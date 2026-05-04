@@ -1,10 +1,11 @@
 import Dexie, { Table } from 'dexie';
-import { Booking, Expense, Property } from './types';
+import { Booking, Expense, Property, RecurringExpense } from './types';
 
 class AppDB extends Dexie {
   properties!: Table<Property, string>;
   bookings!: Table<Booking, string>;
   expenses!: Table<Expense, string>;
+  recurring_expenses!: Table<RecurringExpense, string>;
 
   constructor() {
     super('airbnb-ledger-v2');
@@ -12,6 +13,12 @@ class AppDB extends Dexie {
       properties: 'id, name, createdAt',
       bookings: 'id, propertyId, checkIn, platform, country, createdAt',
       expenses: 'id, propertyId, category, date, createdAt',
+    });
+    this.version(2).stores({
+      properties: 'id, name, createdAt',
+      bookings: 'id, propertyId, checkIn, platform, country, createdAt',
+      expenses: 'id, propertyId, category, date, createdAt',
+      recurring_expenses: 'id, propertyId, active, createdAt',
     });
   }
 }

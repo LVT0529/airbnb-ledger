@@ -55,6 +55,20 @@ export interface Expense {
   amount: number;
   date: string;
   notes?: string;
+  sourceRecurringId?: string;
+  sourceYearMonth?: string;
+  createdAt: number;
+}
+
+export interface RecurringExpense {
+  id: string;
+  propertyId: string | null;
+  category: string;
+  amount: number;
+  dayOfMonth: number;
+  notes?: string;
+  active: boolean;
+  startMonth?: string; // 'YYYY-MM'
   createdAt: number;
 }
 

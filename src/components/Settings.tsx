@@ -15,6 +15,7 @@ import {
 import { supabase } from '../supabase';
 import { Modal } from './Modal';
 import { AirbnbImportModal } from './AirbnbImportModal';
+import { RecurringExpenses } from './RecurringExpenses';
 
 interface GmailConnection {
   email: string | null;
@@ -520,6 +521,15 @@ export function Settings() {
             </p>
           )}
         </div>
+      </section>
+
+      <section className="section">
+        <h2>정기 결제</h2>
+        <RecurringExpenses properties={properties} />
+        <p className="muted small" style={{ margin: '8px 4px 0' }}>
+          매월 같은 날 자동으로 비용 추가. 앱 진입 시 누락된 월이 자동
+          반영됩니다.
+        </p>
       </section>
 
       {properties.length > 0 && (

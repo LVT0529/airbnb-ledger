@@ -11,7 +11,12 @@ import { BottomNav } from './components/BottomNav';
 import { AuthGate } from './components/AuthGate';
 import { Header } from './components/Header';
 import { SyncStatus } from './types';
-import { subscribeRealtime, syncAll, syncAllIcals } from './sync';
+import {
+  applyRecurringExpenses,
+  subscribeRealtime,
+  syncAll,
+  syncAllIcals,
+} from './sync';
 
 export type Tab = 'dashboard' | 'calendar' | 'bookings' | 'expenses' | 'settings';
 
@@ -74,6 +79,16 @@ function MainApp({ session }: { session: Session }) {
       /* 자동 동기화 실패는 silent */
     });
   }, [properties]);
+
+  // 정기 결제 자동 적용: 진입 시 1회 (그날 동안 다시 안 함)
+  useEffect(() => {
+    const KEY = 'recurring-last-applied';
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem(KEY) === today) return;
+    applyRecurringExpenses()
+      .then(() => localStorage.setItem(KEY, today))
+      .catch(() => {});
+  }, [session.user.id]);
 
   return (
     <div className="app">
