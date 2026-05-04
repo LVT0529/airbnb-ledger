@@ -42,8 +42,14 @@ export function parseICS(text: string): IcalEvent[] {
       if (cur && cur.start && cur.end) {
         const description = cur.description ?? '';
         const summary = cur.summary ?? '';
+        // 예약: 'reserved'(Airbnb/VRBO) | 'booked'(Agoda) | description의 reservations URL
+        // 차단: 'blocked'/'not available'/'closed'/'unavailable'
+        const isBlocked =
+          /\bblocked\b|not\s*available|^closed|unavailable/i.test(summary);
         const isReservation =
-          /reserved/i.test(summary) || /reservations\/details/i.test(description);
+          !isBlocked &&
+          (/\breserved\b|\bbooked\b|\bbooking\b/i.test(summary) ||
+            /reservations\/details/i.test(description));
         events.push({
           start: cur.start,
           end: cur.end,
