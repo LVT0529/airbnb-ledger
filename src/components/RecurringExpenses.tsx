@@ -61,7 +61,8 @@ export function RecurringExpenses({ properties }: Props) {
     setApplying(true);
     setMessage(null);
     try {
-      const r = await applyRecurringExpenses();
+      // force=true: 결제일이 미래여도 이번 달까지 강제 추가
+      const r = await applyRecurringExpenses(true);
       const parts: string[] = [];
       if (r.added > 0) parts.push(`${r.added}건 추가`);
       if (r.skipped > 0) parts.push(`${r.skipped}건 이미 처리됨`);
@@ -189,7 +190,7 @@ export function RecurringExpenses({ properties }: Props) {
           disabled={applying}
           style={{ marginTop: 8 }}
         >
-          {applying ? '적용 중…' : '지금 일괄 적용 (밀린 거 추가)'}
+          {applying ? '적용 중…' : '이번 달까지 즉시 적용'}
         </button>
       )}
 

@@ -15,7 +15,6 @@ import {
 import { supabase } from '../supabase';
 import { Modal } from './Modal';
 import { AirbnbImportModal } from './AirbnbImportModal';
-import { RecurringExpenses } from './RecurringExpenses';
 
 interface GmailConnection {
   email: string | null;
@@ -523,15 +522,6 @@ export function Settings() {
         </div>
       </section>
 
-      <section className="section">
-        <h2>정기 결제</h2>
-        <RecurringExpenses properties={properties} />
-        <p className="muted small" style={{ margin: '8px 4px 0' }}>
-          매월 같은 날 자동으로 비용 추가. 앱 진입 시 누락된 월이 자동
-          반영됩니다.
-        </p>
-      </section>
-
       {properties.length > 0 && (
         <section className="section">
           <h2>Airbnb 수익 가져오기</h2>
@@ -632,18 +622,20 @@ export function Settings() {
               </div>
             </label>
             <label>
-              Airbnb iCal URL <span className="muted">(선택)</span>
-              <input
-                type="url"
+              iCal URLs <span className="muted">(선택, 한 줄에 하나씩)</span>
+              <textarea
                 value={icalUrl}
                 onChange={(e) => setIcalUrl(e.target.value)}
-                placeholder="https://www.airbnb.com/calendar/ical/..."
-                inputMode="url"
+                placeholder={
+                  'https://www.airbnb.com/calendar/ical/...\nhttps://www.wehome.me/calendar/ical/...\nhttps://ycs.agoda.com/...\nhttps://ical.booking.com/...\nhttp://www.vrbo.com/icalendar/...\nhttps://mrmention-...amazonaws.com/...'
+                }
+                rows={6}
                 autoComplete="off"
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
               />
               <span className="muted small" style={{ marginTop: 4 }}>
-                Airbnb 호스트 → 캘린더 → 가져오기/내보내기 → iCal 링크
-                복사
+                Airbnb · 위홈 · Agoda · VRBO · Booking.com · 미스터멘션
+                지원. 한 줄에 한 URL씩.
               </span>
             </label>
             <div className="form-actions">

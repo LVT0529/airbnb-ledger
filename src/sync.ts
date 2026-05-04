@@ -341,29 +341,58 @@ export interface IcalSyncResult {
   errors: string[];
 }
 
-export async function syncIcalForProperty(
+function platformFromUrl(url: string): Platform {
+  try {
+    const u = new URL(url);
+    const h = u.host.toLowerCase();
+    if (h.includes('airbnb')) return 'airbnb';
+    if (h.includes('booking.com')) return 'booking';
+    if (h.includes('agoda')) return 'agoda';
+    if (h.includes('vrbo')) return 'vrbo';
+    if (h.includes('wehome')) return 'wehome';
+    if (h.includes('mrmention')) return 'mrmention';
+    if (h.includes('expedia')) return 'expedia';
+  } catch {
+    /* ignore */
+  }
+  return 'other';
+}
+
+function parseIcalUrls(input: string | undefined | null): string[] {
+  if (!input) return [];
+  return input
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s && /^https?:\/\//.test(s));
+}
+
+async function syncIcalForUrl(
   property: Property,
-): Promise<IcalSyncResult> {
-  const result: IcalSyncResult = { added: 0, skipped: 0, errors: [] };
-  if (!property.icalUrl) return result;
+  url: string,
+  result: IcalSyncResult,
+): Promise<void> {
+  const platform = platformFromUrl(url);
 
   const { data, error } = await supabase.functions.invoke('ical-fetch', {
-    body: { url: property.icalUrl },
+    body: { url },
   });
   if (error) {
-    result.errors.push(error.message);
-    return result;
+    result.errors.push(`${platform}: ${error.message}`);
+    return;
   }
   const ics = (data as { ics?: string })?.ics;
   if (!ics) {
-    result.errors.push('iCal 응답 비어있음');
-    return result;
+    result.errors.push(`${platform}: 빈 응답`);
+    return;
   }
 
   const allEvents = parseICS(ics);
   const reservationEvents = allEvents.filter((ev) => ev.isReservation);
   const blockedEvents = allEvents.filter((ev) => !ev.isReservation);
 
+  const userId = await getUserId();
+
+  // 기존 confirmation_code 가져오기
   const existingRes = await supabase
     .from('bookings')
     .select('confirmation_code')
@@ -375,73 +404,89 @@ export async function syncIcalForProperty(
       .filter((c): c is string => !!c),
   );
 
-  const userId = await getUserId();
-
-  // 1. Reservations
+  // 1. Reservations: confirmation code 추출 실패 시 UID로 fallback
   const toInsert: Record<string, unknown>[] = [];
   for (const ev of reservationEvents) {
-    if (!ev.confirmationCode) {
+    const code = ev.confirmationCode ?? (ev.uid ? `${platform.toUpperCase()}-${ev.uid.slice(0, 24)}` : undefined);
+    if (!code) {
       result.skipped++;
       continue;
     }
-    if (existingCodes.has(ev.confirmationCode)) {
+    if (existingCodes.has(code)) {
       result.skipped++;
       continue;
     }
     toInsert.push({
       user_id: userId,
       property_id: property.id,
-      guest_name: ev.confirmationCode,
+      guest_name: ev.confirmationCode ?? code,
       country: 'KR',
-      platform: 'airbnb',
+      platform,
       guests: 1,
       nights: diffDays(ev.start, ev.end),
       check_in: ev.start,
       check_out: ev.end,
       revenue: 0,
-      confirmation_code: ev.confirmationCode,
+      confirmation_code: code,
       status: 'pending',
     });
   }
-
   if (toInsert.length) {
     const ins = await supabase.from('bookings').insert(toInsert);
     if (ins.error) {
-      result.errors.push(ins.error.message);
+      result.errors.push(`${platform} ins: ${ins.error.message}`);
     } else {
       result.added += toInsert.length;
     }
   }
 
-  // 2. Blocked periods — 매 sync마다 기존 blocked 삭제 후 재추가 (차단 기간은 자주 변경됨)
+  // 2. Blocked periods (해당 플랫폼 것만 삭제 후 재추가)
   await supabase
     .from('bookings')
     .delete()
     .eq('property_id', property.id)
+    .eq('platform', platform)
     .eq('status', 'blocked');
 
   const blockedToInsert: Record<string, unknown>[] = [];
   for (const ev of blockedEvents) {
-    const uid = ev.uid ? ev.uid.slice(0, 32) : `${ev.start}-${ev.end}`;
+    const uid = ev.uid ? ev.uid.slice(0, 24) : `${ev.start}-${ev.end}`;
     blockedToInsert.push({
       user_id: userId,
       property_id: property.id,
       guest_name: '차단',
       country: 'KR',
-      platform: 'airbnb',
+      platform,
       guests: 0,
       nights: diffDays(ev.start, ev.end),
       check_in: ev.start,
       check_out: ev.end,
       revenue: 0,
-      confirmation_code: `BLOCK-${uid}`,
+      confirmation_code: `BLOCK-${platform.toUpperCase()}-${uid}`,
       status: 'blocked',
     });
   }
   if (blockedToInsert.length) {
     const ins = await supabase.from('bookings').insert(blockedToInsert);
-    if (ins.error) {
-      result.errors.push(`blocked: ${ins.error.message}`);
+    if (ins.error)
+      result.errors.push(`${platform} block: ${ins.error.message}`);
+  }
+}
+
+export async function syncIcalForProperty(
+  property: Property,
+): Promise<IcalSyncResult> {
+  const result: IcalSyncResult = { added: 0, skipped: 0, errors: [] };
+  const urls = parseIcalUrls(property.icalUrl);
+  if (urls.length === 0) return result;
+
+  for (const url of urls) {
+    try {
+      await syncIcalForUrl(property, url, result);
+    } catch (e) {
+      result.errors.push(
+        e instanceof Error ? e.message : 'unknown',
+      );
     }
   }
 
@@ -545,7 +590,9 @@ function todayLocalYmd(): string {
  * - source_recurring_id + source_year_month unique index가 중복 방지
  * - 첫 적용 월(start_month)부터 현재 월까지 쭉 처리
  */
-export async function applyRecurringExpenses(): Promise<RecurringSyncResult> {
+export async function applyRecurringExpenses(
+  force = false,
+): Promise<RecurringSyncResult> {
   const result: RecurringSyncResult = { added: 0, skipped: 0, errors: [] };
   const userId = await getUserId();
 
@@ -585,7 +632,8 @@ export async function applyRecurringExpenses(): Promise<RecurringSyncResult> {
         const day = Math.min(Number(r.day_of_month), dayMax);
         const dueDate = `${ym}-${String(day).padStart(2, '0')}`;
 
-        if (dueDate <= today) {
+        // force=true면 미래 결제일도 강제 추가 (이번 달까지)
+        if (force || dueDate <= today) {
           const ins = await supabase.from('expenses').insert({
             user_id: userId,
             property_id: r.property_id,
@@ -597,7 +645,6 @@ export async function applyRecurringExpenses(): Promise<RecurringSyncResult> {
             source_year_month: ym,
           });
           if (ins.error) {
-            // 중복 (이미 추가됨)
             if (
               ins.error.code === '23505' ||
               /duplicate/i.test(ins.error.message)

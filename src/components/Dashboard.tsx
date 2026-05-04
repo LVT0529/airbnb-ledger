@@ -23,12 +23,6 @@ function formatKRWBare(amount: number): string {
   );
 }
 
-function formatKRWShort(amount: number): string {
-  const n = Math.abs(amount);
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`;
-  if (n >= 10_000) return `${Math.round(n / 1_000) / 10}만`;
-  return n.toLocaleString('ko-KR');
-}
 
 export function Dashboard() {
   const today = new Date();
@@ -97,18 +91,6 @@ export function Dashboard() {
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const profit = totalRevenue - totalExpense;
   const totalNights = bookings.reduce((s, b) => s + b.proratedNights, 0);
-  const occupancy =
-    properties.length > 0
-      ? (totalNights / (properties.length * range.days)) * 100
-      : 0;
-
-  // ADR (Average Daily Rate) = 매출 / 예약일수
-  const adr = totalNights > 0 ? totalRevenue / totalNights : 0;
-  // RevPAR (Revenue Per Available Room) = 매출 / 가용일수
-  const revpar =
-    properties.length > 0
-      ? totalRevenue / (properties.length * range.days)
-      : 0;
 
   const prevProfit =
     prevBookings.reduce((s, b) => s + b.proratedRevenue, 0) -
@@ -289,49 +271,6 @@ export function Dashboard() {
             {totalNights}
             <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
               {' '}박
-            </span>
-          </div>
-        </div>
-        <div className="dash-stat">
-          <span className="eyebrow">점유율</span>
-          <div className="dash-stat-value">
-            {occupancy.toFixed(0)}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}%
-            </span>
-          </div>
-        </div>
-        <div className="dash-stat">
-          <span className="eyebrow" title="평균 1박 매출 (총 매출 / 예약 박수)">
-            ADR · 1박 평균
-          </span>
-          <div className="dash-stat-value">
-            {adr > 0 ? formatKRWShort(adr) : '0'}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {adr >= 10_000 ? '원' : '원'}
-            </span>
-          </div>
-        </div>
-        <div className="dash-stat">
-          <span
-            className="eyebrow"
-            title="가용일당 매출 (총 매출 / (숙소수 × 월 일수))"
-          >
-            RevPAR · 일평균
-          </span>
-          <div className="dash-stat-value">
-            {revpar > 0 ? formatKRWShort(revpar) : '0'}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              원
-            </span>
-          </div>
-        </div>
-        <div className="dash-stat">
-          <span className="eyebrow">숙소</span>
-          <div className="dash-stat-value">
-            {properties.length}
-            <span style={{ fontSize: 14, color: 'var(--ink-muted)' }}>
-              {' '}개
             </span>
           </div>
         </div>

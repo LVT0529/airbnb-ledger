@@ -4,6 +4,8 @@ export type Platform =
   | 'agoda'
   | 'expedia'
   | 'vrbo'
+  | 'wehome'
+  | 'mrmention'
   | 'direct'
   | 'other';
 

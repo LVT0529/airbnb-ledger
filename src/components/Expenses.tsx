@@ -1,21 +1,42 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
 import { db } from '../db';
 import { Expense } from '../types';
-import { formatKRW } from '../utils';
+import { formatKRW, monthRange } from '../utils';
 import { deleteExpense } from '../sync';
 import { ExpenseForm } from './ExpenseForm';
+import { RecurringExpenses } from './RecurringExpenses';
 
 type Filter = 'all' | 'shared' | string;
 
 export function Expenses() {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
   const [filterProperty, setFilterProperty] = useState<Filter>('all');
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showRecurring, setShowRecurring] = useState(false);
+
+  const range = monthRange(year, month);
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
-  const expenses =
-    useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray()) ?? [];
+  const allExpenses =
+    useLiveQuery(
+      () =>
+        db.expenses
+          .where('date')
+          .between(range.start, range.end, true, true)
+          .toArray(),
+      [range.start, range.end],
+    ) ?? [];
+
+  const expenses = useMemo(
+    () =>
+      [...allExpenses].sort((a, b) => b.date.localeCompare(a.date)),
+    [allExpenses],
+  );
 
   const filtered =
     filterProperty === 'all'
@@ -23,6 +44,8 @@ export function Expenses() {
       : filterProperty === 'shared'
         ? expenses.filter((e) => e.propertyId === null)
         : expenses.filter((e) => e.propertyId === filterProperty);
+
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
 
   const handleAdd = () => {
     setEditing(null);
@@ -43,7 +66,18 @@ export function Expenses() {
     }
   };
 
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
+  const prev = () => {
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else setMonth((m) => m - 1);
+  };
+  const next = () => {
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else setMonth((m) => m + 1);
+  };
 
   return (
     <div className="screen">
@@ -51,6 +85,18 @@ export function Expenses() {
         <h1>비용</h1>
         <button className="btn primary" onClick={handleAdd}>
           + 추가
+        </button>
+      </div>
+
+      <div className="month-nav">
+        <button onClick={prev} aria-label="이전 달">
+          <ChevronLeft size={16} />
+        </button>
+        <h1>
+          {year}년 {month}월
+        </h1>
+        <button onClick={next} aria-label="다음 달">
+          <ChevronRight size={16} />
         </button>
       </div>
 
@@ -79,21 +125,35 @@ export function Expenses() {
         </button>
       </div>
 
-      {filtered.length > 0 && (
-        <div className="card">
-          <div className="metric large">
-            <span>합계</span>
-            <strong className="neg">−{formatKRW(total)}</strong>
-          </div>
+      <div className="card">
+        <div className="metric large">
+          <span>합계</span>
+          <strong className="neg">−{formatKRW(total)}</strong>
+        </div>
+      </div>
+
+      <button
+        className="btn block"
+        onClick={() => setShowRecurring((v) => !v)}
+        style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+      >
+        <Repeat size={14} />
+        정기 결제 관리 {showRecurring ? '닫기' : '열기'}
+      </button>
+
+      {showRecurring && (
+        <div style={{ marginBottom: 16 }}>
+          <RecurringExpenses properties={properties} />
         </div>
       )}
 
       {filtered.length === 0 ? (
-        <div className="empty">비용 내역이 없어요</div>
+        <div className="empty">이번 달 비용 내역이 없어요</div>
       ) : (
         <div className="list">
           {filtered.map((ex) => {
             const prop = properties.find((p) => p.id === ex.propertyId);
+            const isRecurring = !!ex.sourceRecurringId;
             return (
               <div
                 key={ex.id}
@@ -102,11 +162,23 @@ export function Expenses() {
                 style={
                   prop
                     ? { borderLeft: `3px solid ${prop.color}` }
-                    : { borderLeft: `3px solid var(--muted)` }
+                    : { borderLeft: `3px solid var(--ink-soft)` }
                 }
               >
                 <div className="item-main">
-                  <div className="item-title">{ex.category}</div>
+                  <div className="item-title">
+                    {isRecurring && (
+                      <Repeat
+                        size={12}
+                        style={{
+                          marginRight: 6,
+                          verticalAlign: 'middle',
+                          color: 'var(--ink-muted)',
+                        }}
+                      />
+                    )}
+                    {ex.category}
+                  </div>
                   <div className="item-meta">
                     {prop ? prop.name : '공통'} · {ex.date}
                     {ex.notes && ` · ${ex.notes}`}

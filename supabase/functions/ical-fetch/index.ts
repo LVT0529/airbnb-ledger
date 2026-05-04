@@ -12,14 +12,23 @@ const corsHeaders = {
 function isAllowedHost(url: string): boolean {
   try {
     const u = new URL(url);
-    if (u.protocol !== 'https:') return false;
-    const allowed = [
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    const allowedExact = [
       'www.airbnb.com',
       'www.airbnb.co.kr',
+      'www.wehome.me',
+      'ycs.agoda.com',
+      'www.vrbo.com',
       'admin.booking.com',
       'ical.booking.com',
     ];
-    return allowed.includes(u.host);
+    const allowedSuffix = [
+      '.s3.ap-northeast-2.amazonaws.com', // 미스터멘션 등
+      '.amazonaws.com',
+    ];
+    if (allowedExact.includes(u.host)) return true;
+    if (allowedSuffix.some((s) => u.host.endsWith(s))) return true;
+    return false;
   } catch {
     return false;
   }
