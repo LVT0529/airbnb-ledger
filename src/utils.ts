@@ -47,6 +47,8 @@ export function todayYmd(): string {
  * checkIn ~ checkOut(exclusive) 사이의 박 중 year/month에 속하는 박 수.
  * 예: checkIn=2026-04-30, checkOut=2026-05-03 → year=2026, month=4 → 1 (4/30)
  *                                              → year=2026, month=5 → 2 (5/1, 5/2)
+ *
+ * 타임존 이슈를 피하기 위해 YYYY-MM-DD 문자열 비교만 사용.
  */
 export function nightsInMonth(
   checkIn: string,
@@ -55,18 +57,21 @@ export function nightsInMonth(
   month: number,
 ): number {
   if (!checkIn || !checkOut) return 0;
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0); // 그 달의 마지막 날
-  const start = new Date(checkIn);
-  const end = new Date(checkOut); // exclusive
+  const mm = String(month).padStart(2, '0');
+  const monthStartStr = `${year}-${mm}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthEndStr = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
 
   let count = 0;
-  for (
-    const d = new Date(start);
-    d < end;
-    d.setDate(d.getDate() + 1)
-  ) {
-    if (d >= monthStart && d <= monthEnd) count++;
+  let cur = checkIn;
+  let safety = 0;
+  while (cur < checkOut && safety < 400) {
+    if (cur >= monthStartStr && cur <= monthEndStr) count++;
+    // +1 day (로컬 Date 사용. UTC 파싱 안 함.)
+    const [y, m, d] = cur.split('-').map(Number);
+    const next = new Date(y, m - 1, d + 1);
+    cur = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    safety++;
   }
   return count;
 }
