@@ -1334,3 +1334,37 @@ input, button, select, textarea {
   margin-right: 4px;
   font-variant-numeric: tabular-nums;
 }
+
+/* iCal per-platform inputs */
+.ical-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 14px 16px;
+  background: var(--card);
+}
+.ical-fields > .eyebrow {
+  margin-bottom: 4px;
+}
+.ical-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  color: var(--ink-muted) !important;
+}
+.ical-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ical-field input {
+  font-size: 12px !important;
+  font-family: ui-monospace, 'SF Mono', monospace !important;
+  padding: 8px 10px !important;
+}

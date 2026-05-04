@@ -24,6 +24,84 @@ interface GmailConnection {
 
 const COLORS = ['#FF5A5F', '#00A699', '#FC642D', '#5C6BC0', '#FFB400', '#7B61FF'];
 
+const ICAL_FIELDS: {
+  key: string;
+  label: string;
+  emoji: string;
+  placeholder: string;
+  hostMatch: string;
+}[] = [
+  {
+    key: 'airbnb',
+    label: 'Airbnb',
+    emoji: '🏠',
+    placeholder: 'https://www.airbnb.com/calendar/ical/...',
+    hostMatch: 'airbnb',
+  },
+  {
+    key: 'wehome',
+    label: '위홈',
+    emoji: '🏘️',
+    placeholder: 'https://www.wehome.me/calendar/ical/...',
+    hostMatch: 'wehome',
+  },
+  {
+    key: 'agoda',
+    label: 'Agoda',
+    emoji: '🌏',
+    placeholder: 'https://ycs.agoda.com/...',
+    hostMatch: 'agoda',
+  },
+  {
+    key: 'vrbo',
+    label: 'VRBO',
+    emoji: '🏖️',
+    placeholder: 'http://www.vrbo.com/icalendar/...',
+    hostMatch: 'vrbo',
+  },
+  {
+    key: 'booking',
+    label: 'Booking.com',
+    emoji: '🛎️',
+    placeholder: 'https://ical.booking.com/v1/...',
+    hostMatch: 'booking',
+  },
+  {
+    key: 'mrmention',
+    label: '미스터멘션',
+    emoji: '📌',
+    placeholder: 'https://mrmention-...amazonaws.com/...',
+    hostMatch: 'mrmention',
+  },
+];
+
+function detectIcalKey(url: string): string {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    const match = ICAL_FIELDS.find((f) => host.includes(f.hostMatch));
+    return match?.key ?? 'other';
+  } catch {
+    return 'other';
+  }
+}
+
+function parseIcalUrlsToMap(input: string | undefined | null): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!input) return map;
+  const lines = input.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  for (const line of lines) {
+    const key = detectIcalKey(line);
+    if (!map[key]) map[key] = line;
+  }
+  return map;
+}
+
+function joinIcalUrls(map: Record<string, string>): string {
+  return ICAL_FIELDS.map((f) => (map[f.key] ?? '').trim())
+    .filter((s) => s && /^https?:\/\//.test(s))
+    .join('\n');
+}
+
 type EditTarget = Property | 'new' | null;
 
 export function Settings() {
@@ -31,7 +109,7 @@ export function Settings() {
   const [editing, setEditing] = useState<EditTarget>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
-  const [icalUrl, setIcalUrl] = useState('');
+  const [icalMap, setIcalMap] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAirbnbImport, setShowAirbnbImport] = useState(false);
@@ -153,11 +231,11 @@ export function Settings() {
     if (target === 'new') {
       setName('');
       setColor(COLORS[properties.length % COLORS.length]);
-      setIcalUrl('');
+      setIcalMap({});
     } else {
       setName(target.name);
       setColor(target.color);
-      setIcalUrl(target.icalUrl ?? '');
+      setIcalMap(parseIcalUrlsToMap(target.icalUrl));
     }
   };
 
@@ -166,7 +244,7 @@ export function Settings() {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const url = icalUrl.trim() || undefined;
+      const url = joinIcalUrls(icalMap) || undefined;
       if (editing === 'new') {
         await addProperty({ name: name.trim(), color, icalUrl: url });
       } else if (editing) {
@@ -621,23 +699,31 @@ export function Settings() {
                 ))}
               </div>
             </label>
-            <label>
-              iCal URLs <span className="muted">(선택, 한 줄에 하나씩)</span>
-              <textarea
-                value={icalUrl}
-                onChange={(e) => setIcalUrl(e.target.value)}
-                placeholder={
-                  'https://www.airbnb.com/calendar/ical/...\nhttps://www.wehome.me/calendar/ical/...\nhttps://ycs.agoda.com/...\nhttps://ical.booking.com/...\nhttp://www.vrbo.com/icalendar/...\nhttps://mrmention-...amazonaws.com/...'
-                }
-                rows={6}
-                autoComplete="off"
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
-              />
-              <span className="muted small" style={{ marginTop: 4 }}>
-                Airbnb · 위홈 · Agoda · VRBO · Booking.com · 미스터멘션
-                지원. 한 줄에 한 URL씩.
+            <div className="ical-fields">
+              <span className="eyebrow">
+                iCal 주소 <span className="muted">(필요한 것만)</span>
               </span>
-            </label>
+              {ICAL_FIELDS.map((f) => (
+                <label key={f.key} className="ical-field">
+                  <span className="ical-field-label">
+                    {f.emoji} {f.label}
+                  </span>
+                  <input
+                    type="url"
+                    value={icalMap[f.key] ?? ''}
+                    onChange={(e) =>
+                      setIcalMap((prev) => ({
+                        ...prev,
+                        [f.key]: e.target.value,
+                      }))
+                    }
+                    placeholder={f.placeholder}
+                    autoComplete="off"
+                    inputMode="url"
+                  />
+                </label>
+              ))}
+            </div>
             <div className="form-actions">
               <button
                 type="button"
