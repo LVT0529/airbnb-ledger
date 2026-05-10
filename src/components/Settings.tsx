@@ -105,6 +105,26 @@ function joinIcalUrls(map: Record<string, string>): string {
     .join('\n');
 }
 
+async function formatFnError(e: unknown): Promise<string> {
+  if (e && typeof e === 'object' && 'context' in e) {
+    const ctx = (e as { context?: Response }).context;
+    if (ctx && typeof ctx.text === 'function') {
+      try {
+        const text = await ctx.text();
+        try {
+          const j = JSON.parse(text);
+          return j.error || j.message || text;
+        } catch {
+          return text || (e instanceof Error ? e.message : String(e));
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 type EditTarget = Property | 'new' | null;
 
 export function Settings() {
@@ -155,24 +175,25 @@ export function Settings() {
         setGmailBusy(true);
         setGmailMessage('Gmail 연동 처리 중…');
         try {
+          const redirectUri =
+            window.location.origin + window.location.pathname;
           const { data, error } = await supabase.functions.invoke(
             'oauth-callback',
             {
               body: {
+                action: 'exchange',
                 code,
-                redirect_uri:
-                  window.location.origin + window.location.pathname,
+                redirect_uri: redirectUri,
               },
             },
           );
           if (error) throw error;
+          if (data?.error) throw new Error(data.error);
           window.history.replaceState({}, '', window.location.pathname);
           await loadGmail();
           setGmailMessage(`Gmail 연동 완료: ${data?.email ?? ''}`);
         } catch (e) {
-          setGmailMessage(
-            'Gmail 연동 실패: ' + (e instanceof Error ? e.message : ''),
-          );
+          setGmailMessage('Gmail 연동 실패: ' + (await formatFnError(e)));
         } finally {
           setGmailBusy(false);
         }
@@ -183,16 +204,20 @@ export function Settings() {
   const startGmailOAuth = async () => {
     setGmailBusy(true);
     try {
+      const redirectUri =
+        window.location.origin + window.location.pathname;
       const { data, error } = await supabase.functions.invoke<{
         url: string;
-      }>('oauth-callback', { method: 'GET' });
+        error?: string;
+      }>('oauth-callback', {
+        body: { action: 'authorize', redirect_uri: redirectUri },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       if (!data?.url) throw new Error('URL 생성 실패');
       window.location.href = data.url;
     } catch (e) {
-      setGmailMessage(
-        'OAuth URL 생성 실패: ' + (e instanceof Error ? e.message : ''),
-      );
+      setGmailMessage('OAuth URL 생성 실패: ' + (await formatFnError(e)));
       setGmailBusy(false);
     }
   };

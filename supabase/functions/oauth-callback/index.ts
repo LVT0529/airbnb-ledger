@@ -43,13 +43,25 @@ Deno.serve(async (req: Request) => {
     }
     const userId = userRes.user.id;
 
-    // GET: authorize URL 반환 (client_id 노출 회피)
-    if (req.method === 'GET') {
+    const body = await req.json().catch(() => ({}));
+    const action: 'authorize' | 'exchange' =
+      body.action ?? (body.code ? 'exchange' : 'authorize');
+    const redirectUri = body.redirect_uri || defaultRedirect;
+
+    if (!redirectUri) {
+      return json(
+        { error: 'redirect_uri 필요 (client에서 전달하거나 GOOGLE_REDIRECT_URI 설정)' },
+        400,
+      );
+    }
+
+    // authorize: Google OAuth URL 반환 (client_id 노출 회피)
+    if (action === 'authorize') {
       const url =
         'https://accounts.google.com/o/oauth2/v2/auth?' +
         new URLSearchParams({
           client_id: clientId,
-          redirect_uri: defaultRedirect ?? '',
+          redirect_uri: redirectUri,
           response_type: 'code',
           scope: 'https://www.googleapis.com/auth/gmail.readonly',
           access_type: 'offline',
@@ -60,10 +72,8 @@ Deno.serve(async (req: Request) => {
       return json({ url });
     }
 
-    const { code, redirect_uri } = await req.json();
+    const { code } = body;
     if (!code) return json({ error: 'code required' }, 400);
-
-    const redirectUri = redirect_uri || defaultRedirect;
 
     // Exchange code → tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

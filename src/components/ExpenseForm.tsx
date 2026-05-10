@@ -32,7 +32,7 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
 
   const [propertyId, setPropertyId] = useState<string | null>(initialPropId);
   const [category, setCategory] = useState<ExpenseCategory>(
-    expense?.category ?? prefs.lastCategory ?? '청소비',
+    expense?.category ?? '',
   );
 
   const allExpenses = useLiveQuery(() => db.expenses.toArray()) ?? [];
