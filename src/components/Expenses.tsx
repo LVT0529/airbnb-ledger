@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronLeft, ChevronRight, Repeat, Search, X } from 'lucide-react';
 import { db } from '../db';
@@ -70,6 +70,58 @@ export function Expenses() {
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
 
+  // 검색 모드에서 월별로 그룹핑
+  const groupedByMonth = useMemo(() => {
+    if (!isSearching) return [];
+    const groups = new Map<string, { items: Expense[]; total: number }>();
+    for (const ex of filtered) {
+      const ym = ex.date.slice(0, 7); // YYYY-MM
+      const cur = groups.get(ym) ?? { items: [], total: 0 };
+      cur.items.push(ex);
+      cur.total += ex.amount;
+      groups.set(ym, cur);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([ym, g]) => ({
+        ym,
+        label: `${ym.slice(0, 4)}년 ${Number(ym.slice(5, 7))}월`,
+        items: g.items,
+        total: g.total,
+      }));
+  }, [filtered, isSearching]);
+
+  // 검색어 하이라이트 — case-insensitive
+  const highlight = (text: string): ReactNode => {
+    const q = search.trim();
+    if (!q || !text) return text;
+    const lower = text.toLowerCase();
+    const lowerQ = q.toLowerCase();
+    const parts: ReactNode[] = [];
+    let i = 0;
+    let idx = lower.indexOf(lowerQ, i);
+    while (idx !== -1) {
+      if (idx > i) parts.push(text.slice(i, idx));
+      parts.push(
+        <mark
+          key={`m-${idx}`}
+          style={{
+            background: 'rgba(255, 176, 60, 0.22)',
+            color: 'inherit',
+            padding: '0 2px',
+            borderRadius: 2,
+          }}
+        >
+          {text.slice(idx, idx + q.length)}
+        </mark>,
+      );
+      i = idx + q.length;
+      idx = lower.indexOf(lowerQ, i);
+    }
+    if (i < text.length) parts.push(text.slice(i));
+    return parts;
+  };
+
   const handleAdd = () => {
     setEditing(null);
     setShowForm(true);
@@ -87,6 +139,56 @@ export function Expenses() {
         '삭제 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'),
       );
     }
+  };
+
+  const renderItem = (ex: Expense): ReactNode => {
+    const prop = properties.find((p) => p.id === ex.propertyId);
+    const isRecurring = !!ex.sourceRecurringId;
+    return (
+      <div
+        key={ex.id}
+        className="list-item"
+        onClick={() => handleEdit(ex)}
+        style={
+          prop
+            ? { borderLeft: `3px solid ${prop.color}` }
+            : { borderLeft: `3px solid var(--ink-soft)` }
+        }
+      >
+        <div className="item-main">
+          <div className="item-title">
+            {isRecurring && (
+              <Repeat
+                size={12}
+                style={{
+                  marginRight: 6,
+                  verticalAlign: 'middle',
+                  color: 'var(--ink-muted)',
+                }}
+              />
+            )}
+            {highlight(ex.category)}
+          </div>
+          <div className="item-meta">
+            {prop ? prop.name : '공통'} · {ex.date}
+            {ex.notes && <> · {highlight(ex.notes)}</>}
+          </div>
+        </div>
+        <div className="item-amount">
+          <span>{formatKRW(ex.amount)}</span>
+          <button
+            className="del"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(ex.id);
+            }}
+            aria-label="삭제"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const prev = () => {
@@ -210,84 +312,103 @@ export function Expenses() {
         </button>
       </div>
 
-      <div className="card">
-        <div className="metric large">
-          <span>{isSearching ? `검색 결과 ${filtered.length}건` : '합계'}</span>
-          <strong className="neg">−{formatKRW(total)}</strong>
+      {isSearching ? (
+        <div
+          className="card"
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '10px 14px',
+          }}
+        >
+          <span style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
+            <span style={{ color: 'var(--ink)', fontWeight: 600 }}>
+              {filtered.length}
+            </span>
+            건 · {groupedByMonth.length}개월
+          </span>
+          <strong className="neg" style={{ fontSize: 18 }}>
+            −{formatKRW(total)}
+          </strong>
         </div>
-      </div>
-
-      <button
-        className="btn block"
-        onClick={() => setShowRecurring((v) => !v)}
-        style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-      >
-        <Repeat size={14} />
-        정기 결제 관리 {showRecurring ? '닫기' : '열기'}
-      </button>
-
-      {showRecurring && (
-        <div style={{ marginBottom: 16 }}>
-          <RecurringExpenses properties={properties} />
+      ) : (
+        <div className="card">
+          <div className="metric large">
+            <span>합계</span>
+            <strong className="neg">−{formatKRW(total)}</strong>
+          </div>
         </div>
+      )}
+
+      {!isSearching && (
+        <>
+          <button
+            className="btn block"
+            onClick={() => setShowRecurring((v) => !v)}
+            style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            <Repeat size={14} />
+            정기 결제 관리 {showRecurring ? '닫기' : '열기'}
+          </button>
+
+          {showRecurring && (
+            <div style={{ marginBottom: 16 }}>
+              <RecurringExpenses properties={properties} />
+            </div>
+          )}
+        </>
       )}
 
       {filtered.length === 0 ? (
         <div className="empty">
           {isSearching ? '검색 결과가 없어요' : '이번 달 비용 내역이 없어요'}
         </div>
-      ) : (
-        <div className="list">
-          {filtered.map((ex) => {
-            const prop = properties.find((p) => p.id === ex.propertyId);
-            const isRecurring = !!ex.sourceRecurringId;
-            return (
-              <div
-                key={ex.id}
-                className="list-item"
-                onClick={() => handleEdit(ex)}
-                style={
-                  prop
-                    ? { borderLeft: `3px solid ${prop.color}` }
-                    : { borderLeft: `3px solid var(--ink-soft)` }
-                }
+      ) : isSearching ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {groupedByMonth.map((g) => (
+            <section key={g.ym}>
+              <header
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  padding: '0 4px 8px',
+                  marginBottom: 4,
+                  borderBottom: '1px solid var(--ink-soft)',
+                }}
               >
-                <div className="item-main">
-                  <div className="item-title">
-                    {isRecurring && (
-                      <Repeat
-                        size={12}
-                        style={{
-                          marginRight: 6,
-                          verticalAlign: 'middle',
-                          color: 'var(--ink-muted)',
-                        }}
-                      />
-                    )}
-                    {ex.category}
-                  </div>
-                  <div className="item-meta">
-                    {prop ? prop.name : '공통'} · {ex.date}
-                    {ex.notes && ` · ${ex.notes}`}
-                  </div>
-                </div>
-                <div className="item-amount">
-                  <span>{formatKRW(ex.amount)}</span>
-                  <button
-                    className="del"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(ex.id);
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                      color: 'var(--ink)',
                     }}
-                    aria-label="삭제"
                   >
-                    ×
-                  </button>
+                    {g.label}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--ink-muted)' }}>
+                    {g.items.length}건
+                  </span>
                 </div>
+                <span
+                  className="neg"
+                  style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  −{formatKRW(g.total)}
+                </span>
+              </header>
+              <div className="list">
+                {g.items.map((ex) => renderItem(ex))}
               </div>
-            );
-          })}
+            </section>
+          ))}
         </div>
+      ) : (
+        <div className="list">{filtered.map((ex) => renderItem(ex))}</div>
       )}
 
       {showForm && (
