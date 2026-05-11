@@ -437,7 +437,7 @@ async function syncIcalForUrl(
       user_id: userId,
       property_id: property.id,
       guest_name: ev.confirmationCode ?? code,
-      country: 'KR',
+      country: '',
       platform,
       guests: 1,
       nights: diffDays(ev.start, ev.end),

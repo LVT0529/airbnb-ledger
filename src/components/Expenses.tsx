@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Repeat, Search, X } from 'lucide-react';
 import { db } from '../db';
 import { Expense } from '../types';
 import { formatKRW, monthRange } from '../utils';
@@ -18,11 +18,13 @@ export function Expenses() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
+  const [search, setSearch] = useState('');
 
   const range = monthRange(year, month);
+  const isSearching = search.trim().length > 0;
 
   const properties = useLiveQuery(() => db.properties.toArray()) ?? [];
-  const allExpenses =
+  const monthExpenses =
     useLiveQuery(
       () =>
         db.expenses
@@ -31,12 +33,33 @@ export function Expenses() {
           .toArray(),
       [range.start, range.end],
     ) ?? [];
+  // 검색 모드일 때는 전체 기간 로드
+  const allExpenses =
+    useLiveQuery<Expense[]>(
+      () =>
+        isSearching
+          ? db.expenses.toArray()
+          : Promise.resolve<Expense[]>([]),
+      [isSearching],
+    ) ?? [];
 
-  const expenses = useMemo(
-    () =>
-      [...allExpenses].sort((a, b) => b.date.localeCompare(a.date)),
-    [allExpenses],
-  );
+  const baseExpenses = isSearching ? allExpenses : monthExpenses;
+
+  const expenses = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = isSearching
+      ? baseExpenses.filter((e) => {
+          const propName =
+            properties.find((p) => p.id === e.propertyId)?.name ?? '';
+          return (
+            (e.category ?? '').toLowerCase().includes(q) ||
+            (e.notes ?? '').toLowerCase().includes(q) ||
+            propName.toLowerCase().includes(q)
+          );
+        })
+      : baseExpenses;
+    return [...list].sort((a, b) => b.date.localeCompare(a.date));
+  }, [baseExpenses, isSearching, search, properties]);
 
   const filtered =
     filterProperty === 'all'
@@ -88,17 +111,79 @@ export function Expenses() {
         </button>
       </div>
 
-      <div className="month-nav">
-        <button onClick={prev} aria-label="이전 달">
-          <ChevronLeft size={16} />
-        </button>
-        <h1>
-          {year}년 {month}월
-        </h1>
-        <button onClick={next} aria-label="다음 달">
-          <ChevronRight size={16} />
-        </button>
+      <div
+        className="search-bar"
+        style={{
+          position: 'relative',
+          marginBottom: 12,
+        }}
+      >
+        <Search
+          size={16}
+          style={{
+            position: 'absolute',
+            left: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--ink-muted)',
+            pointerEvents: 'none',
+          }}
+        />
+        <input
+          type="text"
+          placeholder="카테고리·메모·숙소 검색"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '10px 36px 10px 36px',
+            fontSize: '14px',
+            border: '1px solid var(--ink-soft)',
+            borderRadius: 8,
+            background: 'var(--surface)',
+            color: 'var(--ink)',
+            boxSizing: 'border-box',
+          }}
+        />
+        {isSearching && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label="검색 지우기"
+            style={{
+              position: 'absolute',
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'transparent',
+              border: 'none',
+              padding: 4,
+              cursor: 'pointer',
+              color: 'var(--ink-muted)',
+            }}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
+
+      {isSearching ? (
+        <div className="month-nav">
+          <h1>전체 기간</h1>
+        </div>
+      ) : (
+        <div className="month-nav">
+          <button onClick={prev} aria-label="이전 달">
+            <ChevronLeft size={16} />
+          </button>
+          <h1>
+            {year}년 {month}월
+          </h1>
+          <button onClick={next} aria-label="다음 달">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="filter-bar">
         <button
@@ -127,7 +212,7 @@ export function Expenses() {
 
       <div className="card">
         <div className="metric large">
-          <span>합계</span>
+          <span>{isSearching ? `검색 결과 ${filtered.length}건` : '합계'}</span>
           <strong className="neg">−{formatKRW(total)}</strong>
         </div>
       </div>
@@ -148,7 +233,9 @@ export function Expenses() {
       )}
 
       {filtered.length === 0 ? (
-        <div className="empty">이번 달 비용 내역이 없어요</div>
+        <div className="empty">
+          {isSearching ? '검색 결과가 없어요' : '이번 달 비용 내역이 없어요'}
+        </div>
       ) : (
         <div className="list">
           {filtered.map((ex) => {

@@ -108,23 +108,106 @@ function parseAmount(s: string): number {
   return Math.round(Number(m[1].replace(/,/g, '')));
 }
 
-export interface ParsedAirbnbMail {
+export interface ParsedMail {
   kind: 'reservation' | 'cancellation' | 'payout' | 'message' | 'unknown';
+  platform: 'airbnb' | 'agoda' | 'unknown';
   confirmationCode?: string;
   guestName?: string;
+  country?: string; // ISO 2-letter code
   checkIn?: string;
   checkOut?: string;
   nights?: number;
   guests?: number;
-  amount?: number; // 매출/지급액
+  amount?: number; // 매출/지급액 (호스트 실수령 우선)
 }
 
-function classify(subject: string, body: string): ParsedAirbnbMail['kind'] {
+// Agoda 등에서 영문 국가명을 ISO 2-letter 코드로 변환
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  'south korea': 'KR', 'korea': 'KR', 'republic of korea': 'KR',
+  'japan': 'JP',
+  'china': 'CN', "people's republic of china": 'CN',
+  'taiwan': 'TW',
+  'hong kong': 'HK',
+  'singapore': 'SG',
+  'malaysia': 'MY',
+  'thailand': 'TH',
+  'vietnam': 'VN', 'viet nam': 'VN',
+  'indonesia': 'ID',
+  'philippines': 'PH',
+  'india': 'IN',
+  'united states': 'US', 'united states of america': 'US', 'usa': 'US', 'u.s.a.': 'US', 'us': 'US',
+  'canada': 'CA',
+  'mexico': 'MX',
+  'brazil': 'BR',
+  'argentina': 'AR',
+  'united kingdom': 'GB', 'uk': 'GB', 'great britain': 'GB', 'england': 'GB',
+  'ireland': 'IE',
+  'france': 'FR',
+  'germany': 'DE',
+  'spain': 'ES',
+  'italy': 'IT',
+  'portugal': 'PT',
+  'netherlands': 'NL',
+  'belgium': 'BE',
+  'switzerland': 'CH',
+  'austria': 'AT',
+  'sweden': 'SE',
+  'norway': 'NO',
+  'denmark': 'DK',
+  'finland': 'FI',
+  'poland': 'PL',
+  'czech republic': 'CZ', 'czechia': 'CZ',
+  'greece': 'GR',
+  'russia': 'RU', 'russian federation': 'RU',
+  'turkey': 'TR', 'türkiye': 'TR', 'turkiye': 'TR',
+  'israel': 'IL',
+  'united arab emirates': 'AE', 'uae': 'AE',
+  'saudi arabia': 'SA',
+  'egypt': 'EG',
+  'south africa': 'ZA',
+  'australia': 'AU',
+  'new zealand': 'NZ',
+};
+
+function normalizeCountryName(s: string): string | undefined {
+  const k = s.trim().toLowerCase();
+  return COUNTRY_NAME_TO_CODE[k];
+}
+
+// 구버전 호환
+export type ParsedAirbnbMail = ParsedMail;
+
+function detectPlatform(
+  from: string,
+  subject: string,
+  body: string,
+): ParsedMail['platform'] {
+  const head = (from + '\n' + subject).toLowerCase();
+  if (/agoda\.com|아고다\s*예약/.test(head)) return 'agoda';
+  if (/airbnb\.com/.test(head)) return 'airbnb';
+  // body fallback
+  const all = (subject + '\n' + body).toLowerCase();
+  if (/booking\s+confirmed|reservation\s+confirmed|new\s+booking/.test(all))
+    return 'airbnb';
+  return 'unknown';
+}
+
+function classify(subject: string, body: string): ParsedMail['kind'] {
+  const s = subject.toLowerCase();
   const t = (subject + '\n' + body).toLowerCase();
-  if (/cancel|취소|cancelled/.test(t)) return 'cancellation';
-  if (/payout|지급액|정산|송금|paid out/.test(t)) return 'payout';
-  if (/reservation\s+confirmed|booked|new\s+reservation|예약\s*확정|예약이\s*확정|새\s*예약|reserved\s+your/.test(t))
+
+  // 1) Subject 기준 (가장 신뢰도 높음)
+  if (/reservation\s+confirmed|booking\s+confirmed|예약\s*확정|예약이\s*확정|아고다\s*예약\s*id.*확정|booking\s*confirmation/.test(s))
     return 'reservation';
+  if (/cancelled|취소/.test(s)) return 'cancellation';
+  if (/payout|지급액|정산/.test(s)) return 'payout';
+
+  // 2) Body fallback — 광범위한 "cancel" 단독 매칭은 금지 (free cancellation 등 안내문 회피)
+  if (/your\s+reservation\s+(?:was|has\s+been)\s+cancell?ed|guest\s+cancell?ed|예약이\s*취소/.test(t))
+    return 'cancellation';
+  if (/new\s+booking|new\s+reservation|booked|reserved\s+your|새\s*예약|예약\s*확정서/.test(t))
+    return 'reservation';
+  if (/paid\s+out|송금/.test(t)) return 'payout';
   if (/new\s+message|메시지/.test(t)) return 'message';
   return 'unknown';
 }
@@ -132,10 +215,10 @@ function classify(subject: string, body: string): ParsedAirbnbMail['kind'] {
 export function parseAirbnbMail(
   subject: string,
   body: string,
-): ParsedAirbnbMail {
+): ParsedMail {
   const text = subject + '\n\n' + body;
   const kind = classify(subject, body);
-  const out: ParsedAirbnbMail = { kind };
+  const out: ParsedMail = { kind, platform: 'airbnb' };
 
   // confirmation code
   const cmCode = text.match(/\b(HM[A-Z0-9]{6,12})\b/);
@@ -180,22 +263,25 @@ export function parseAirbnbMail(
     );
   }
 
-  // guests (숙박 인원)
+  // guests (숙박 인원) — Airbnb 영문 메일은 "4 adults" / "2 guests" 형식
   const guestsKo = text.match(/게스트\s*(\d+)\s*명|성인\s*(\d+)\s*명?|(\d+)\s*명\s*게스트|총\s*(\d+)\s*명/);
-  const guestsEn = text.match(/(\d+)\s*guests?/i);
+  const guestsEn = text.match(/(\d+)\s*(?:guests?|adults?)/i);
   if (guestsKo) {
     out.guests = Number(
       guestsKo[1] ?? guestsKo[2] ?? guestsKo[3] ?? guestsKo[4],
     );
   } else if (guestsEn) out.guests = Number(guestsEn[1]);
 
-  // amount: payout 우선, 없으면 total
+  // amount: 호스트 실수령(payout) 우선
+  // 우선순위: "You earn ₩X" / "지급액 ₩X" / "Total payout ₩X" / "you'll be paid ₩X" / 합계
+  const youEarnEn = text.match(/you\s+earn[^\d$₩]*[₩￦$]?\s*([\d,]+)/i);
   const payoutKo = text.match(/지급액[^\d₩￦]*[₩￦]?\s*([\d,]+)/);
   const payoutEn = text.match(
     /(?:total\s+)?payout[^\d$₩]*[₩￦$]?\s*([\d,]+)|you[''']ll be paid[^\d$₩]*[₩￦$]?\s*([\d,]+)/i,
   );
   const totalKo = text.match(/(?:합계|총)\s*[₩￦]?\s*([\d,]+)\s*원?/);
   const amountStr =
+    youEarnEn?.[1] ??
     payoutKo?.[1] ??
     payoutEn?.[1] ??
     payoutEn?.[2] ??
@@ -204,19 +290,101 @@ export function parseAirbnbMail(
   if (amountStr)
     out.amount = Math.round(Number(amountStr.replace(/,/g, '')));
 
-  // 게스트 이름 추출 시도 (subject 우선)
-  // "Reservation from John Doe", "[Name]님의 예약"
+  // 게스트 이름 추출 (subject 우선, CJK 지원)
+  // 패턴: "[Name]님의 예약" / "Reservation from John" / "Reservation confirmed - 雯茜 arrives May 27"
+  // / 본문 "New booking confirmed! 雯茜 arrives ..." / 본문 "Guest: John"
+  // CJK 포함 이름 글자 클래스 (한글/한자/히라가나/가타카나/영문)
+  const NAME_CHAR = "A-Za-z가-힣\\u4e00-\\u9fff\\u3040-\\u30ff\\s.'-";
   const nameKo = subject.match(/^([가-힣A-Za-z\s.]+?)님의?\s*예약/);
+  // "New booking confirmed! 雯茜 arrives May 27" 같은 본문 패턴 (가장 안정적)
+  const nameArrivesBody = body.match(
+    new RegExp(`(?:booking|reservation)\\s+confirmed[!.\\s]*([${NAME_CHAR}]{2,40}?)\\s+arrives\\b`, 'i'),
+  );
   const nameEn = subject.match(/(?:from|by)\s+([A-Za-z][A-Za-z\s.'-]{1,40})/i);
   const nameDirect = body.match(/Guest[:\s]+([A-Za-z][A-Za-z\s.'-]{1,40})/);
   const guestName =
     nameKo?.[1]?.trim() ??
+    nameArrivesBody?.[1]?.trim() ??
     nameEn?.[1]?.trim() ??
     nameDirect?.[1]?.trim() ??
     undefined;
   if (guestName && guestName.length < 40) out.guestName = guestName;
 
   return out;
+}
+
+// =================================================================
+// Agoda 파서
+// =================================================================
+
+export function parseAgodaMail(subject: string, body: string): ParsedMail {
+  const text = subject + '\n' + body;
+  const kind = classify(subject, body);
+  const out: ParsedMail = { kind, platform: 'agoda' };
+
+  // Booking ID — 본문 또는 제목에서 7~12자리 숫자
+  // 제목: "아고다 예약 ID 1712686675 - 확정"
+  // 본문: "예약 번호\n1712686675"
+  const codeSubj = subject.match(/(?:예약\s*ID|Booking\s*ID)[^0-9]*(\d{7,12})/i);
+  const codeBody = body.match(/(?:Booking\s*ID|예약\s*번호)\s*\n?\s*(\d{7,12})/i);
+  if (codeSubj) out.confirmationCode = codeSubj[1];
+  else if (codeBody) out.confirmationCode = codeBody[1];
+
+  // 게스트 이름 — "Customer First Name 고객 이름 YI-SHAN" + "Customer Last Name 고객 성 GUO"
+  const fn = body.match(/Customer\s+First\s+Name\s*(?:고객\s*이름)?\s+([A-Z][A-Z\s\-']{0,40}?)(?:\s{2,}|\n|\r|Customer)/);
+  const ln = body.match(/Customer\s+Last\s+Name\s*(?:고객\s*성)?\s+([A-Z][A-Z\s\-']{0,40}?)(?:\s{2,}|\n|\r|Country)/);
+  if (fn || ln) {
+    const name = [fn?.[1]?.trim(), ln?.[1]?.trim()].filter(Boolean).join(' ');
+    if (name) out.guestName = name;
+  }
+
+  // 거주 국가 — "Country of Residence 거주 국가 Taiwan"
+  const cr = body.match(/Country\s+of\s+Residence\s*(?:거주\s*국가)?\s+([A-Za-z][A-Za-z\s\.()'-]{1,40}?)(?:\s{2,}|\n|\r|Check)/);
+  if (cr) {
+    const code = normalizeCountryName(cr[1]);
+    if (code) out.country = code;
+  }
+
+  // 체크인/체크아웃 — "Check-in 체크인 2026년 9월 17일"
+  const ci = body.match(/Check-in[^0-9]*(\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2})/);
+  const co = body.match(/Check-out[^0-9]*(\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2})/);
+  if (ci) {
+    const d = parseDate(ci[1]);
+    if (d) out.checkIn = d;
+  }
+  if (co) {
+    const d = parseDate(co[1]);
+    if (d) out.checkOut = d;
+  }
+  if (out.checkIn && out.checkOut) {
+    const d1 = new Date(out.checkIn);
+    const d2 = new Date(out.checkOut);
+    out.nights = Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
+  }
+
+  // 인원 — "4 Adults"
+  const adults = text.match(/(\d+)\s*Adults?/i);
+  if (adults) out.guests = Number(adults[1]);
+
+  // 호스트 실수령 — "Net rate (incl. taxes & fees)\n입금 금액(...)\nKRW 782,500.00"
+  const net = body.match(/Net\s+rate[\s\S]{0,200}?KRW\s*([\d,]+(?:\.\d+)?)/i)
+    ?? body.match(/입금\s*금액[\s\S]{0,200}?KRW\s*([\d,]+(?:\.\d+)?)/);
+  if (net) {
+    out.amount = Math.round(Number(net[1].replace(/,/g, '')));
+  }
+
+  return out;
+}
+
+// 발신자/제목/본문으로 플랫폼을 판단해 적절한 파서를 호출
+export function parseMail(from: string, subject: string, body: string): ParsedMail {
+  const platform = detectPlatform(from, subject, body);
+  if (platform === 'agoda') return parseAgodaMail(subject, body);
+  if (platform === 'airbnb') return parseAirbnbMail(subject, body);
+  // unknown: 두 파서 모두 시도 후 유의미한 결과 선택
+  const a = parseAirbnbMail(subject, body);
+  const g = parseAgodaMail(subject, body);
+  return a.confirmationCode ? a : g.confirmationCode ? g : { kind: 'unknown', platform: 'unknown' };
 }
 
 // =================================================================
@@ -306,9 +474,9 @@ Deno.serve(async (req: Request) => {
         .eq('user_id', userId);
     }
 
-    // List Airbnb messages
+    // Airbnb + Agoda, 직접 수신 + 포워딩 모두 캐치
     const query =
-      'from:(automated@airbnb.com OR express@airbnb.com OR noreply@airbnb.com) newer_than:180d';
+      '(from:airbnb.com OR from:agoda.com OR subject:"Reservation confirmed" OR subject:"예약이 확정" OR subject:"예약 확정" OR subject:"아고다 예약 ID" OR subject:"Booking confirmation") newer_than:180d';
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=100`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -331,10 +499,15 @@ Deno.serve(async (req: Request) => {
     // Get existing bookings to find property mappings
     const { data: existingBookings } = await supabase
       .from('bookings')
-      .select('id, property_id, confirmation_code, status, guest_name, revenue, nights, guests');
-    const bookingByCode = new Map<string, typeof existingBookings extends null ? never : NonNullable<typeof existingBookings>[number]>();
+      .select('id, property_id, confirmation_code, status, guest_name, revenue, nights, guests, platform, check_in');
+    type ExistingBooking = NonNullable<typeof existingBookings>[number];
+    const bookingByCode = new Map<string, ExistingBooking>();
+    // 플랫폼 + 체크인 날짜로도 매칭 (iCal에서 만든 placeholder 예약과 Gmail 매칭)
+    const bookingByPlatformDate = new Map<string, ExistingBooking>();
     (existingBookings ?? []).forEach((b) => {
       if (b.confirmation_code) bookingByCode.set(b.confirmation_code, b);
+      if (b.platform && b.check_in)
+        bookingByPlatformDate.set(`${b.platform}|${b.check_in}`, b);
     });
 
     // Get properties (for fallback)
@@ -373,11 +546,13 @@ Deno.serve(async (req: Request) => {
         const full = await fullRes.json();
 
         const headers = full.payload?.headers ?? [];
-        const subject =
-          headers.find((h: { name: string }) => h.name.toLowerCase() === 'subject')?.value ?? '';
+        const findHeader = (name: string) =>
+          headers.find((h: { name: string }) => h.name.toLowerCase() === name)?.value ?? '';
+        const subject = findHeader('subject');
+        const from = findHeader('from');
         const body = extractBody(full.payload);
 
-        const parsed = parseAirbnbMail(subject, body);
+        const parsed = parseMail(from, subject, body);
 
         let resultKind: string = parsed.kind;
 
@@ -386,15 +561,24 @@ Deno.serve(async (req: Request) => {
           parsed.kind === 'payout'
         ) {
           if (parsed.confirmationCode) {
-            const existing = bookingByCode.get(parsed.confirmationCode);
+            // 1차: confirmation_code 매칭, 2차: 플랫폼+체크인 날짜 매칭 (iCal placeholder 대응)
+            let existing = bookingByCode.get(parsed.confirmationCode);
+            if (!existing && parsed.platform !== 'unknown' && parsed.checkIn) {
+              existing = bookingByPlatformDate.get(`${parsed.platform}|${parsed.checkIn}`);
+            }
             if (existing) {
               const upd: Record<string, unknown> = { status: 'confirmed' };
               if (parsed.amount && parsed.amount > 0) upd.revenue = parsed.amount;
               if (parsed.guestName) upd.guest_name = parsed.guestName;
+              if (parsed.country) upd.country = parsed.country;
               if (parsed.guests) upd.guests = parsed.guests;
               if (parsed.nights) upd.nights = parsed.nights;
               if (parsed.checkIn) upd.check_in = parsed.checkIn;
               if (parsed.checkOut) upd.check_out = parsed.checkOut;
+              // 정확한 confirmation_code로 갱신 (iCal placeholder의 AGODA-xxx → 실제 Booking ID)
+              if (existing.confirmation_code !== parsed.confirmationCode) {
+                upd.confirmation_code = parsed.confirmationCode;
+              }
               const u = await supabase
                 .from('bookings')
                 .update(upd)
@@ -407,8 +591,8 @@ Deno.serve(async (req: Request) => {
                 user_id: userId,
                 property_id: defaultPropertyId,
                 guest_name: parsed.guestName ?? parsed.confirmationCode,
-                country: 'KR',
-                platform: 'airbnb',
+                country: parsed.country ?? '',
+                platform: parsed.platform === 'unknown' ? 'airbnb' : parsed.platform,
                 guests: parsed.guests ?? 1,
                 nights: parsed.nights ?? 1,
                 check_in: parsed.checkIn,
@@ -441,13 +625,18 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update sync state
+    // total_processed: gmail_processed_messages 테이블의 실제 행 수로 산정 (초기화 시 자동 반영)
+    const { count: actualTotal } = await supabase
+      .from('gmail_processed_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
     await supabase.from('gmail_sync_state').upsert(
       {
         user_id: userId,
         last_sync_at: new Date().toISOString(),
         last_processed_at: new Date().toISOString(),
-        total_processed: (stats.newProcessed +
-          (await getCurrentTotal(supabase, userId))) as number,
+        total_processed: actualTotal ?? 0,
         last_error: stats.errors.length ? stats.errors.join('\n') : null,
       },
       { onConflict: 'user_id' },
@@ -461,18 +650,6 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-
-async function getCurrentTotal(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-): Promise<number> {
-  const { data } = await supabase
-    .from('gmail_sync_state')
-    .select('total_processed')
-    .eq('user_id', userId)
-    .maybeSingle();
-  return (data?.total_processed as number) ?? 0;
-}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

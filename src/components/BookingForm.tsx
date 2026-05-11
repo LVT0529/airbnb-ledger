@@ -71,6 +71,10 @@ export function BookingForm({ booking, properties, onClose }: Props) {
       alert('게스트 이름을 입력해주세요');
       return;
     }
+    if (!country) {
+      alert('국가를 선택해주세요');
+      return;
+    }
 
     const revenue = parseAmount(revenueStr);
     const data = {
@@ -202,6 +206,7 @@ export function BookingForm({ booking, properties, onClose }: Props) {
         <label>
           국가
           <select value={country} onChange={(e) => setCountry(e.target.value)}>
+            <option value="">국가 선택…</option>
             {COUNTRIES.map((c) => (
               <option key={c.code} value={c.code}>
                 {c.name}
