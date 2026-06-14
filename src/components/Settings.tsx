@@ -235,9 +235,7 @@ export function Settings() {
       );
       await loadGmail();
     } catch (e) {
-      setGmailMessage(
-        '동기화 실패: ' + (e instanceof Error ? e.message : ''),
-      );
+      setGmailMessage('동기화 실패: ' + (await formatFnError(e)));
     } finally {
       setGmailBusy(false);
     }
