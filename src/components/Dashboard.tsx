@@ -7,7 +7,7 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { db } from '../db';
-import { COUNTRIES, PLATFORMS } from '../data';
+import { COUNTRIES, PLATFORMS, categoryMajor } from '../data';
 import { flagEmoji, formatKRW, monthRange, prorateBookingForMonth } from '../utils';
 import { DonutChart } from './DonutChart';
 import { Modal } from './Modal';
@@ -177,7 +177,8 @@ export function Dashboard() {
   const expenseSegments = useMemo(() => {
     const map = new Map<string, number>();
     expenses.forEach((e) => {
-      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+      const major = categoryMajor(e.category);
+      map.set(major, (map.get(major) ?? 0) + e.amount);
     });
     return Array.from(map.entries())
       .map(([label, value], i) => ({
@@ -291,7 +292,7 @@ export function Dashboard() {
               title="비용 구성"
               total={totalExpense}
               segments={expenseSegments}
-              defaultLabel="항목"
+              defaultLabel="분류"
               defaultValue={String(expenseSegments.length)}
               negative
               onSegmentClick={(label) =>
@@ -583,8 +584,10 @@ function DrilldownModal({
     );
   }
 
-  // expense category
-  const list = expenses.filter((e) => e.category === drilldown.category);
+  // expense category (대분류 기준 롤업)
+  const list = expenses.filter(
+    (e) => categoryMajor(e.category) === drilldown.category,
+  );
   const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
   const total = sorted.reduce((s, e) => s + e.amount, 0);
   return (

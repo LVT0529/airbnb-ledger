@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Expense, ExpenseCategory, Property } from '../types';
-import { EXPENSE_CATEGORIES } from '../data';
+import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_GROUPS } from '../data';
 import {
   formatAmountInput,
   getRecentCategories,
@@ -45,6 +45,14 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
   }, [allExpenses]);
 
   const recentCategories = useMemo(() => getRecentCategories(3), []);
+  const knownItems = useMemo(
+    () => new Set<string>(EXPENSE_CATEGORY_GROUPS.flatMap((g) => g.items)),
+    [],
+  );
+  // 등록된 소분류가 아니면(사용자 직접 입력값) 처음부터 직접입력 모드
+  const [customMode, setCustomMode] = useState(
+    () => !!expense?.category && !knownItems.has(expense.category),
+  );
   const [amountStr, setAmountStr] = useState(
     expense ? formatAmountInput(String(expense.amount)) : '',
   );
@@ -136,22 +144,75 @@ export function ExpenseForm({ expense, properties, onClose }: Props) {
                   key={c}
                   type="button"
                   className={`quick-chip ${category === c ? 'active' : ''}`}
-                  onClick={() => setCategory(c)}
+                  onClick={() => {
+                    setCategory(c);
+                    setCustomMode(!knownItems.has(c));
+                  }}
                 >
                   {c}
                 </button>
               ))}
             </div>
           )}
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            list="cat-suggestions"
-            required
-            placeholder="예: 청소비, 광고비, 인테리어…"
-            autoComplete="off"
-          />
+          {customMode ? (
+            <>
+              <input
+                type="text"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                list="cat-suggestions"
+                required
+                placeholder="예: 청소비, 광고비, 인테리어…"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => {
+                  setCustomMode(false);
+                  setCategory('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--ink-muted)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  padding: '4px 0 0',
+                  textAlign: 'left',
+                }}
+              >
+                ← 목록에서 선택
+              </button>
+            </>
+          ) : (
+            <select
+              value={category}
+              required
+              onChange={(e) => {
+                if (e.target.value === '__custom__') {
+                  setCustomMode(true);
+                  setCategory('');
+                } else {
+                  setCategory(e.target.value);
+                }
+              }}
+            >
+              <option value="" disabled>
+                카테고리 선택…
+              </option>
+              {EXPENSE_CATEGORY_GROUPS.map((g) => (
+                <optgroup key={g.major} label={g.major}>
+                  {g.items.map((it) => (
+                    <option key={it} value={it}>
+                      {it}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              <option value="__custom__">+ 직접 입력…</option>
+            </select>
+          )}
           <datalist id="cat-suggestions">
             {categorySuggestions.map((c) => (
               <option key={c} value={c} />

@@ -64,4 +64,8 @@ export const COUNTRIES = [
   { code: 'NZ', name: '뉴질랜드' },
 ];
 
-export { EXPENSE_CATEGORIES } from './types';
+export {
+  EXPENSE_CATEGORIES,
+  EXPENSE_CATEGORY_GROUPS,
+  categoryMajor,
+} from './types';
