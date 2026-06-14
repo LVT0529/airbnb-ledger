@@ -245,9 +245,15 @@ export function Settings() {
     if (!confirm('Gmail 연동을 해제할까요? (저장된 예약은 유지)')) return;
     setGmailBusy(true);
     try {
-      await supabase.from('user_google_tokens').delete().neq('user_id', '');
+      const { error } = await supabase
+        .from('user_google_tokens')
+        .delete()
+        .neq('user_id', '');
+      if (error) throw error;
       await loadGmail();
       setGmailMessage('Gmail 연동 해제됨');
+    } catch (e) {
+      setGmailMessage('연동 해제 실패: ' + (await formatFnError(e)));
     } finally {
       setGmailBusy(false);
     }
@@ -690,6 +696,13 @@ export function Settings() {
                 style={{ marginTop: 12 }}
               >
                 {gmailBusy ? '동기화 중…' : '지금 동기화'}
+              </button>
+              <button
+                className="btn block"
+                onClick={startGmailOAuth}
+                disabled={gmailBusy}
+              >
+                {gmailBusy ? '연결 중…' : '다시 연결 (토큰 갱신)'}
               </button>
               <button
                 className="btn block"
